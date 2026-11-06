@@ -214,7 +214,7 @@ Widget taps call `add_points` directly using the shared session. If the device i
 
 ## 6. Build phases
 
-**Phase 1, foundation (about 2 weeks).** Expo project, Supabase project, auth, profiles and usernames, schema and RLS migrations, Rules page.
+**Phase 1, foundation (about 2 weeks).** Expo project, Supabase project, auth, profiles and usernames, schema and RLS migrations, Rules page. *Built: app shell, email code sign in, username and widget intro onboarding, Rules page, full schema with RLS and tests. Waiting on a live Supabase project.*
 
 **Phase 2, scoring and games (about 2 weeks).** Create, join and invite flows, game screen with realtime leaderboard, `add_points` and undo, Home scoring panel with quick adds and custom amount, game type windows and auto ending.
 
