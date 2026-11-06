@@ -210,15 +210,15 @@ Widget taps call `addPoints` directly using the shared session. If the device is
 
 **Phase 1, foundation (about 2 weeks).** Expo project, Firebase project, auth, profiles and usernames, Firestore security rules, Rules page. *Built: app shell, email and password sign in, username and widget intro onboarding, Rules page, security rules for every collection, the claimUsername function, and emulator tests. Live on Firebase project `contact-10-1c0fd`: sign in, rules and claimUsername deployed.*
 
-**Phase 2, scoring and games (about 2 weeks).** Create, join and invite flows, game screen with live leaderboard, `addPoints` and undo, Home scoring panel with quick adds and custom amount, game type windows and auto ending.
+**Phase 2, scoring and games (about 2 weeks).** *Built.* Create, join and invite flows, game screen with live leaderboard, `addPoints` and undo, Home scoring panel with quick adds and custom amount, game type windows and auto ending.
 
-**Phase 3, rewards and flagging (about 1.5 weeks).** Milestone ladder and custom reward editing, unlock detection, celebration screen, game winner banner, flag button, creator review queue, and point removal with target and milestone recompute.
+**Phase 3, rewards and flagging (about 1.5 weeks).** *Built.* Milestone ladder and custom reward editing, unlock detection, celebration screen, game winner banner, flag button, creator review queue, and point removal with target and milestone recompute.
 
-**Phase 4, friends and notifications (about 2 weeks).** Friend requests and list, push token registration, notification functions with recipient dedupe, inbox, Settings toggles.
+**Phase 4, friends and notifications (about 2 weeks).** *Built. Push delivery needs the EAS project id.* Friend requests and list, push token registration, notification functions with recipient dedupe, inbox, Settings toggles.
 
-**Phase 5, widgets (about 2 weeks).** iOS WidgetKit Quick Add, Score and Leaderboard widgets with App Intents; Android Glance equivalents; offline queue; both widget discovery popups.
+**Phase 5, widgets (about 2 weeks).** *iOS built (Quick Add, Score, Leaderboard, offline queue, both popups). Android widget not started.* iOS WidgetKit Quick Add, Score and Leaderboard widgets with App Intents; Android Glance equivalents; offline queue; both widget discovery popups.
 
-**Phase 6, polish and launch (about 1 week).** Empty states, haptics and sounds on scoring, app icons and store listings, TestFlight and internal Android testing.
+**Phase 6, polish and launch (about 1 week).** *App icon, haptics, account deletion and EAS config done. Apple and Google sign in not started.* Empty states, haptics and sounds on scoring, app icons and store listings, TestFlight and internal Android testing.
 
 Roughly 10.5 weeks for one developer. Phases 4 and 5 can run in parallel with two people.
 

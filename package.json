@@ -35,7 +35,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/lib/*.test.ts",
+    "test": "TZ=America/Los_Angeles node --test src/lib/*.test.ts",
     "test:backend": "npm --prefix backend test"
   },
   "private": true

@@ -4,6 +4,8 @@ import { httpsCallable } from 'firebase/functions';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { auth, db, functions } from './firebase';
+import { unregisterPush } from './push';
+import { syncWidget } from './widget';
 import type { Profile, ProfilePatch } from './types';
 
 type Result = { error: string | null; code?: string };
@@ -97,7 +99,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const signOut = useCallback(() => firebaseSignOut(auth), []);
+  const signOut = useCallback(async () => {
+    if (uid) await unregisterPush(uid);
+    syncWidget(null);
+    await firebaseSignOut(auth);
+  }, [uid]);
 
   const ready = authChecked && (uid === null || profileFor === uid);
 

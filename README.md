@@ -15,9 +15,21 @@ The app runs on the Firebase project `contact-10-1c0fd` (Blaze plan). Email/Pass
 ## Run the app
 
 1. `npm install`
-2. `npm start`, then open it in Expo Go or a development build.
+2. Most features run in Expo Go (`npm start`). The home screen widget, push notifications and haptics need a development build: `npx eas-cli@latest build --profile development --platform ios`.
 
 The Firebase web config is built into `src/lib/firebase.ts`. To use a different project, copy `.env.example` to `.env` and fill it in.
+
+## Ship to TestFlight
+
+Run these from the repository root on a computer with Node 22. EAS builds in the cloud, so no Xcode is needed.
+
+1. `npx eas-cli@latest login` with your Expo account.
+2. `npx eas-cli@latest init` links the project to Expo and writes `extra.eas.projectId` (and `owner`) into `app.json`. Commit that change: push notifications need the project id.
+3. Add your Apple Team ID to `app.json` as `expo.ios.appleTeamId` (developer.apple.com, Account, Membership details).
+4. `npx eas-cli@latest build --platform ios --profile production --auto-submit`. Sign in with your Apple developer account when asked and let EAS create the certificates, provisioning profiles (for the app and the widget), and the push notification key. `--auto-submit` uploads the build to App Store Connect.
+5. In App Store Connect, open the app, go to TestFlight, and add testers once the build finishes processing.
+
+Bundle ID: `com.jpquestions.contact10` (widget: `com.jpquestions.contact10.widget`). App Group: `group.com.jpquestions.contact10`.
 
 ## Deploy the backend
 
@@ -46,6 +58,8 @@ The backend tests need Java (for the Firestore emulator) and the backend depende
 ```
 src/app/              screens (Expo Router: every file is a route)
 src/app/(tabs)/       Home, Games, Friends, Rewards, Rules
+src/app/game/         game screen and new game form
+targets/widget/       iOS home screen widgets (SwiftUI, App Intents)
 src/components/       shared UI
 src/lib/              Firebase client, auth, rules and milestone logic
 backend/firestore.rules   who can read and write what

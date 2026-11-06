@@ -20,6 +20,10 @@ const config = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID ?? '1:100319233016:web:0ff168101d827c15a48c0d',
 };
 
+/** Base URL of the deployed callable functions, used by the iOS widget. */
+export const functionsBase = `https://us-central1-${config.projectId}.cloudfunctions.net`;
+export const firebaseApiKey = config.apiKey;
+
 export const isConfigured = Boolean(config.apiKey && config.projectId && config.appId);
 
 const firstLoad = getApps().length === 0;

@@ -13,9 +13,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, space } from './theme';
 
-export function Screen({ children, scroll = true }: { children: ReactNode; scroll?: boolean }) {
+/** `header` screens sit under a navigation bar, so they skip the top inset. */
+export function Screen({ children, scroll = true, header = false }: { children: ReactNode; scroll?: boolean; header?: boolean }) {
   return (
-    <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.screen} edges={header ? ['left', 'right'] : ['top', 'left', 'right']}>
       {scroll ? (
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {children}
