@@ -7,13 +7,17 @@ import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 import { Platform } from 'react-native';
 
+// The Contact 10 web app config. These values identify the project and are
+// public by design; access is controlled by backend/firestore.rules. Any of
+// them can be overridden with EXPO_PUBLIC_FIREBASE_* variables in .env, for
+// example to point a build at a staging project.
 const config = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? 'AIzaSyBSKZW_8Lvx499GM_kthIiPMKWHmsRElx8',
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ?? 'contact-10-1c0fd.firebaseapp.com',
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ?? 'contact-10-1c0fd',
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ?? 'contact-10-1c0fd.firebasestorage.app',
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? '100319233016',
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID ?? '1:100319233016:web:0ff168101d827c15a48c0d',
 };
 
 export const isConfigured = Boolean(config.apiKey && config.projectId && config.appId);

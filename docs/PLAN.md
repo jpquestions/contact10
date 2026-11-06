@@ -208,7 +208,7 @@ Widget taps call `addPoints` directly using the shared session. If the device is
 
 ## 6. Build phases
 
-**Phase 1, foundation (about 2 weeks).** Expo project, Firebase project, auth, profiles and usernames, Firestore security rules, Rules page. *Built: app shell, email and password sign in, username and widget intro onboarding, Rules page, security rules for every collection, the claimUsername function, and emulator tests. Waiting on a live Firebase project.*
+**Phase 1, foundation (about 2 weeks).** Expo project, Firebase project, auth, profiles and usernames, Firestore security rules, Rules page. *Built: app shell, email and password sign in, username and widget intro onboarding, Rules page, security rules for every collection, the claimUsername function, and emulator tests. Live on Firebase project `contact-10-1c0fd`: sign in, rules and claimUsername deployed.*
 
 **Phase 2, scoring and games (about 2 weeks).** Create, join and invite flows, game screen with live leaderboard, `addPoints` and undo, Home scoring panel with quick adds and custom amount, game type windows and auto ending.
 

@@ -8,20 +8,16 @@ See [docs/PLAN.md](docs/PLAN.md) for the product and build plan.
 
 Expo (React Native, TypeScript, Expo Router) for the app. Firebase for the backend: Auth, Cloud Firestore with security rules, and Cloud Functions. Home screen widgets will be native WidgetKit and Glance targets.
 
-## Firebase setup (once)
+## Firebase project
 
-1. Create a project at console.firebase.google.com.
-2. Upgrade it to the Blaze plan (Cloud Functions need it) and add a budget alert under Billing, Budgets and alerts. Normal use of this app should stay inside the free allowance.
-3. Build, Authentication: get started and enable Email/Password.
-4. Build, Firestore Database: create a database in production mode.
-5. Project settings, General, Your apps: add a Web app and copy its config values.
-6. Put the project id in `backend/.firebaserc`.
+The app runs on the Firebase project `contact-10-1c0fd` (Blaze plan). Email/Password sign in, the Firestore database (nam5), the security rules and the Cloud Functions are deployed. Container images from function builds are deleted after a day to avoid storage charges.
 
 ## Run the app
 
 1. `npm install`
-2. Copy `.env.example` to `.env` and fill in the web app config values.
-3. `npm start`, then open it in Expo Go or a development build.
+2. `npm start`, then open it in Expo Go or a development build.
+
+The Firebase web config is built into `src/lib/firebase.ts`. To use a different project, copy `.env.example` to `.env` and fill it in.
 
 ## Deploy the backend
 
@@ -33,7 +29,7 @@ npx firebase login
 npm run deploy
 ```
 
-This deploys the Firestore security rules, indexes and Cloud Functions.
+This deploys the Email/Password sign in setting, the Firestore security rules and indexes, and the Cloud Functions.
 
 ## Checks
 
