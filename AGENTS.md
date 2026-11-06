@@ -43,6 +43,8 @@ Docs: https://docs.expo.dev/eas/index.md
 ## Contact 10 project notes
 
 - Product plan: `docs/PLAN.md`. Build phases are listed there.
-- Database changes go in a new file under `supabase/migrations`; never edit an applied migration. Add RLS tests to `supabase/tests` and run `npm run test:db`.
-- Clients never write scores or totals directly. New writes go through SECURITY DEFINER functions with `set search_path = ''`.
-- Before finishing a change run `npm run typecheck`, `npm test` and `npm run test:db`.
+- Backend is Firebase and lives in `backend/` with its own package.json, so its tooling stays out of the Expo dependency tree.
+- Clients never write scores, totals, games, flags, invites, friendships or usernames. Those go through Cloud Functions in `backend/functions/src`. Client writable fields are listed in `backend/firestore.rules`; keep `src/lib/types.ts` in sync.
+- Milestones are defined in three places (`src/lib/milestones.ts`, `backend/functions/src/shared.ts`, `backend/firestore.rules`); `backend/tests/shared.test.ts` checks they match.
+- Import auth from `@firebase/auth`, not `firebase/auth`, so the React Native build is used.
+- Before finishing a change run `npm run typecheck`, `npm test` and `npm run test:backend`.

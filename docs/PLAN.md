@@ -147,80 +147,74 @@ Tab bar: Home, Games, Friends, Rewards, Rules.
 
 **App:** React Native with Expo (TypeScript) for one codebase on iOS and Android. Widgets are native targets: a Swift WidgetKit extension on iOS (added through `@bacons/apple-targets` or a config plugin) and a Kotlin Glance widget on Android. The app and widgets share the session token and a small cache (active game, totals) through an iOS App Group and Android shared preferences.
 
-**Backend:** Supabase. Postgres for data, Supabase Auth, Row Level Security on every table, Realtime subscriptions for live leaderboards, and Edge Functions for push delivery through Expo Push (APNs and FCM underneath).
+**Backend:** Firebase on the Blaze plan (pay as you go with a free monthly allowance; set a budget alert). Firebase Auth for accounts, Cloud Firestore for data with live listeners for leaderboards, Firestore security rules for every read, and Cloud Functions (TypeScript, 2nd gen) for every write that touches a score, a total, a game, a flag or a friendship. Push notifications go through Expo Push (APNs and FCM underneath), sent from Cloud Functions.
 
-**Why this split:** widgets must be native regardless, and everything else is standard CRUD plus realtime, which Supabase covers without a custom server.
+**Why this split:** widgets must be native regardless, and everything else is standard data plus live updates, which Firebase covers without running our own server. Supabase was the first choice but the account had no free project slots left.
 
-### 5.1 Data model
+**Sign in:** email and password for now, with password reset by email. Apple and Google sign in come in Phase 6 once the developer accounts are set up.
+
+### 5.1 Data model (Firestore)
 
 ```
-profiles          id (auth user), username unique, display_name, avatar_url,
-                  lifetime_points int default 0, active_game_id,
-                  seen_widget_intro_launch bool, seen_widget_intro_first_score bool
+users/{uid}                    username, displayName, avatarUrl, lifetimePoints, activeGameId,
+                               seenWidgetIntroLaunch, seenWidgetIntroFirstScore, createdAt
+users/{uid}/peers/{peerUid}    who may see this profile (friends, pending requests, game mates);
+                               kept in sync by functions
+users/{uid}/rewards/{threshold}       rewardText (private to the owner)
+users/{uid}/unlocks/{threshold}       reachedAt (visible to friends)
+users/{uid}/notifications/{id}        kind, payload, readAt, createdAt
+users/{uid}/pushTokens/{token}        platform, updatedAt
 
-friendships       user_a, user_b (stored with user_a < user_b), status (pending|accepted|blocked),
-                  requested_by, created_at, accepted_at
+usernames/{username}           uid (uniqueness and search)
+friendships/{uidA_uidB}        userA, userB (sorted), status (pending|accepted|blocked),
+                               actedBy, createdAt, acceptedAt
 
-games             id, name, type (night|weekend|ongoing), starts_at, ends_at null,
-                  target_points, reward_text, reward_mode (first|everyone), house_rules,
-                  created_by, winner_id null, won_at null, status (active|ended)
+games/{gameId}                 name, type, startsAt, endsAt, targetPoints, rewardText, rewardMode,
+                               houseRules, createdBy, memberIds[], winnerId, wonAt, status
+games/{gameId}/members/{uid}   role, points, reachedTargetAt, joinedAt, username
+games/{gameId}/flags/{id}      entryId, flaggedBy, reason, status, decidedBy, decidedAt
 
-game_members      game_id, user_id, role (admin|member), points int default 0,
-                  reached_target_at null, joined_at
-
-game_invites      id, game_id, invited_by, invitee_id null, code, status, expires_at
-
-point_entries     id, user_id, game_id null, amount int check 1..100,
-                  source (app|widget), created_at, deleted_at null,
-                  removed_by_flag bool default false
-
-user_rewards      user_id, threshold, reward_text      (user's custom reward per milestone)
-
-milestone_unlocks user_id, threshold, reached_at       (unique on user_id + threshold)
-
-notifications     id, recipient_id, kind, payload jsonb, read_at, created_at
-
-entry_flags       id, entry_id, game_id, flagged_by, reason null,
-                  status (pending|upheld|dismissed), decided_by, decided_at
-                  (unique on entry_id, so an entry is only ever reviewed once)
-
-push_tokens       user_id, token, platform, updated_at
+entries/{entryId}              userId, gameId (null for solo), amount, source, createdAt,
+                               deletedAt, removedByFlag
+invites/{inviteId}             gameId, invitedBy, inviteeId (null for share links), code, status, expiresAt
 ```
+
+`memberIds` on each game lets the rules check membership with one read and lets the app list "my games" with one query.
 
 ### 5.2 Scoring flow
 
-All scoring goes through one Postgres function, `add_points(game_id, amount, source)`, called by the app and the widgets. In a single transaction it:
+All scoring goes through one callable Cloud Function, `addPoints({ gameId, amount, source, entryId })`, used by the app and the widgets. In a single Firestore transaction it:
 
 1. Validates the amount (1 to 100), that the caller is a member of the game, and that the game is active.
-2. Inserts the `point_entries` row.
-3. Increments `game_members.points` and `profiles.lifetime_points` (cached totals so leaderboards are a simple indexed read).
-4. If this member just crossed the target, sets `game_members.reached_target_at`. In first to reach mode it also sets `games.winner_id` and `won_at` if no one has won yet; in everyone mode each member who crosses gets the reward.
-5. Inserts a `milestone_unlocks` row for each threshold crossed.
+2. Creates the `entries` document (the client supplied `entryId` makes retries idempotent).
+3. Increments the member's game `points` and the user's `lifetimePoints`.
+4. If this member just crossed the target, sets `reachedTargetAt`. In first to reach mode it also sets the game's `winnerId` and `wonAt` if no one has won yet; in everyone mode each member who crosses gets the reward.
+5. Creates an `unlocks` document for each milestone crossed.
 6. Returns the new totals and any unlocks so the client can celebrate immediately.
 
-Undo calls `remove_points(entry_id)`, which soft deletes and decrements the cached totals. Milestones already unlocked stay unlocked when a user undoes their own entry.
+`removePoints` handles undo the same way in reverse. Milestones already unlocked stay unlocked when a user undoes their own entry.
 
-Flags use two more functions. `flag_entry(entry_id, reason)` checks that the caller is a member of the game, is not the entry's owner, and is inside the flag window. `resolve_flag(flag_id, upheld)` can only be called by the game creator. When upheld, in one transaction it soft deletes the entry with `removed_by_flag`, decrements both cached totals, recomputes `reached_target_at` and the game winner if the member fell below the target, and deletes any `milestone_unlocks` the member no longer qualifies for.
+`flagEntry` checks that the caller is in the game, does not own the entry, and is inside the flag window. `resolveFlag` can only be called by the game creator. When upheld, one transaction marks the entry `removedByFlag`, takes the amount off both totals, recomputes `reachedTargetAt` and the game winner if the member fell below the target, and deletes any unlocks the member no longer qualifies for.
 
-A database webhook on `milestone_unlocks` and on `game_members.reached_target_at` triggers an Edge Function that computes recipients (accepted friends for personal milestones, game members for game targets, minus the actor, minus anyone who muted that category), writes `notifications` rows, and sends pushes.
+Firestore triggers on new unlocks and on members reaching a target compute recipients (accepted friends for personal milestones, game members for game targets, minus the actor, minus anyone who muted that category), write `notifications` documents and send pushes.
 
 ### 5.3 Security
 
-RLS rules in plain terms: you can read profiles of friends and fellow game members; you can read a game, its members and its entries only if you are a member; you can write entries only through `add_points`; only the game creator can resolve flags; you can only edit your own rewards and settings. Invite codes are random and expire. Usernames are searchable, but nothing else about a user is visible until a friendship or shared game exists.
+Security rules in plain terms: you can read profiles of friends and fellow game members; you can read a game, its members and its entries only if you are a member; you can never write scores, totals, games, flags, invites or friendships directly (only functions can); only the game creator can resolve flags; you can only edit your own rewards and settings. Invite codes are random and expire. Usernames are searchable in pages of 20, but nothing else about a user is visible until a friendship or shared game exists. Functions run with `maxInstances` capped to keep the bill bounded.
 
 ### 5.4 Widgets and offline
 
-Widget taps call `add_points` directly using the shared session. If the device is offline, the entry is queued in shared storage with a client generated id and flushed by the app or the next widget refresh; the id makes the insert idempotent so retries never double count. Widgets refresh their timeline after every tap and on a push silent update when someone in the active game scores.
+Widget taps call `addPoints` directly using the shared session. If the device is offline, the entry is queued in shared storage with a client generated id and flushed by the app or the next widget refresh; the id makes the insert idempotent so retries never double count. Widgets refresh their timeline after every tap and on a push silent update when someone in the active game scores.
 
 ## 6. Build phases
 
-**Phase 1, foundation (about 2 weeks).** Expo project, Supabase project, auth, profiles and usernames, schema and RLS migrations, Rules page. *Built: app shell, email code sign in, username and widget intro onboarding, Rules page, full schema with RLS and tests. Waiting on a live Supabase project.*
+**Phase 1, foundation (about 2 weeks).** Expo project, Firebase project, auth, profiles and usernames, Firestore security rules, Rules page. *Built: app shell, email and password sign in, username and widget intro onboarding, Rules page, security rules for every collection, the claimUsername function, and emulator tests. Waiting on a live Firebase project.*
 
-**Phase 2, scoring and games (about 2 weeks).** Create, join and invite flows, game screen with realtime leaderboard, `add_points` and undo, Home scoring panel with quick adds and custom amount, game type windows and auto ending.
+**Phase 2, scoring and games (about 2 weeks).** Create, join and invite flows, game screen with live leaderboard, `addPoints` and undo, Home scoring panel with quick adds and custom amount, game type windows and auto ending.
 
 **Phase 3, rewards and flagging (about 1.5 weeks).** Milestone ladder and custom reward editing, unlock detection, celebration screen, game winner banner, flag button, creator review queue, and point removal with target and milestone recompute.
 
-**Phase 4, friends and notifications (about 2 weeks).** Friend requests and list, push token registration, notification Edge Function with recipient dedupe, inbox, Settings toggles.
+**Phase 4, friends and notifications (about 2 weeks).** Friend requests and list, push token registration, notification functions with recipient dedupe, inbox, Settings toggles.
 
 **Phase 5, widgets (about 2 weeks).** iOS WidgetKit Quick Add, Score and Leaderboard widgets with App Intents; Android Glance equivalents; offline queue; both widget discovery popups.
 

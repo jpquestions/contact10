@@ -1,0 +1,159 @@
+rules_version = '2';
+
+// Contact 10 access rules.
+//
+// Clients read through these rules and write only their own profile fields,
+// rewards, notification read state and push tokens. Everything that changes a
+// score, a total, a game, an invite, a flag or a friendship is written by
+// Cloud Functions with the Admin SDK, which bypasses these rules.
+//
+// Privacy: a profile is visible to its owner and to anyone listed in the
+// owner's peers subcollection. Functions keep peers in sync: a peer is a
+// friend, someone with a pending request in either direction, or someone who
+// shares a game. Blocking removes the peer entry.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function me() {
+      return request.auth.uid;
+    }
+
+    function isPeerOf(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)/peers/$(me()));
+    }
+
+    function pairId(a, b) {
+      return a < b ? a + '_' + b : b + '_' + a;
+    }
+
+    function isFriend(uid) {
+      let path = /databases/$(database)/documents/friendships/$(pairId(uid, me()));
+      return exists(path) && get(path).data.status == 'accepted';
+    }
+
+    function isGameMember(gameId) {
+      return me() in get(/databases/$(database)/documents/games/$(gameId)).data.memberIds;
+    }
+
+    function isOptionalString(value, max) {
+      return value == null || (value is string && value.size() <= max);
+    }
+
+    // ----------------------------------------------------------------------
+    // Profiles
+    // ----------------------------------------------------------------------
+
+    match /users/{uid} {
+      allow read: if signedIn() && (me() == uid || isPeerOf(uid));
+
+      // The app creates its own profile on first sign in, with defaults only.
+      // Usernames are claimed through the claimUsername function.
+      allow create: if signedIn() && me() == uid
+        && request.resource.data.keys().hasOnly([
+             'username', 'displayName', 'avatarUrl', 'lifetimePoints', 'activeGameId',
+             'seenWidgetIntroLaunch', 'seenWidgetIntroFirstScore', 'createdAt'])
+        && request.resource.data.username == null
+        && request.resource.data.lifetimePoints == 0
+        && request.resource.data.activeGameId == null
+        && request.resource.data.seenWidgetIntroLaunch == false
+        && request.resource.data.seenWidgetIntroFirstScore == false
+        && request.resource.data.createdAt == request.time
+        && isOptionalString(request.resource.data.displayName, 40)
+        && isOptionalString(request.resource.data.avatarUrl, 500);
+
+      // Totals and usernames are never client editable.
+      allow update: if signedIn() && me() == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'displayName', 'avatarUrl', 'activeGameId',
+             'seenWidgetIntroLaunch', 'seenWidgetIntroFirstScore'])
+        && isOptionalString(request.resource.data.displayName, 40)
+        && isOptionalString(request.resource.data.avatarUrl, 500)
+        && (request.resource.data.activeGameId == null
+            || (request.resource.data.activeGameId is string
+                && isGameMember(request.resource.data.activeGameId)))
+        && request.resource.data.seenWidgetIntroLaunch is bool
+        && request.resource.data.seenWidgetIntroFirstScore is bool;
+
+      // Who may see this profile. Maintained by functions.
+      match /peers/{peerUid} {
+        allow read: if signedIn() && me() == uid;
+      }
+
+      // Personal milestone rewards: private to the owner.
+      match /rewards/{threshold} {
+        allow read, delete: if signedIn() && me() == uid;
+        allow create, update: if signedIn() && me() == uid
+          && threshold in ['10', '50', '100', '200', '300', '400', '500', '1000', '2500', '5000', '10000']
+          && request.resource.data.keys().hasOnly(['rewardText'])
+          && request.resource.data.rewardText is string
+          && request.resource.data.rewardText.size() > 0
+          && request.resource.data.rewardText.size() <= 200;
+      }
+
+      // Milestones reached. Friends can see these, not the reward text.
+      match /unlocks/{threshold} {
+        allow read: if signedIn() && (me() == uid || isFriend(uid));
+      }
+
+      match /notifications/{notificationId} {
+        allow read: if signedIn() && me() == uid;
+        allow update: if signedIn() && me() == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt'])
+          && request.resource.data.readAt is timestamp;
+      }
+
+      match /pushTokens/{token} {
+        allow read, delete: if signedIn() && me() == uid;
+        allow create, update: if signedIn() && me() == uid
+          && request.resource.data.keys().hasOnly(['platform', 'updatedAt'])
+          && request.resource.data.platform in ['ios', 'android']
+          && request.resource.data.updatedAt == request.time;
+      }
+    }
+
+    // Username to uid lookup, used for search and uniqueness. Search queries
+    // are capped so the directory cannot be scraped in one go.
+    match /usernames/{name} {
+      allow get: if signedIn();
+      allow list: if signedIn() && request.query.limit <= 20;
+    }
+
+    match /friendships/{pair} {
+      allow read: if signedIn() && me() in [resource.data.userA, resource.data.userB];
+    }
+
+    // ----------------------------------------------------------------------
+    // Games
+    // ----------------------------------------------------------------------
+
+    match /games/{gameId} {
+      allow read: if signedIn() && me() in resource.data.memberIds;
+
+      match /members/{memberUid} {
+        allow read: if signedIn() && isGameMember(gameId);
+      }
+
+      match /flags/{flagId} {
+        allow read: if signedIn() && isGameMember(gameId);
+      }
+    }
+
+    // Solo entries are private to their owner; game entries are visible to
+    // everyone in that game.
+    match /entries/{entryId} {
+      allow read: if signedIn() && (
+        resource.data.userId == me()
+        || (resource.data.gameId != null && isGameMember(resource.data.gameId)));
+    }
+
+    match /invites/{inviteId} {
+      allow read: if signedIn() && (
+        resource.data.inviteeId == me() || isGameMember(resource.data.gameId));
+    }
+  }
+}

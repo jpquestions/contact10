@@ -4,7 +4,7 @@ import { ActivityIndicator } from 'react-native';
 import { Body, Centered, Title } from '../components/ui';
 import { colors } from '../components/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
-import { isConfigured } from '../lib/supabase';
+import { isConfigured } from '../lib/firebase';
 
 export default function RootLayout() {
   return (
@@ -16,7 +16,7 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { ready, session, profile } = useAuth();
+  const { ready, user, profile } = useAuth();
 
   if (!ready) {
     return (
@@ -26,9 +26,9 @@ function RootNavigator() {
     );
   }
 
-  const signedIn = session !== null;
+  const signedIn = user !== null;
   // Onboarding runs until a username is picked and the widget intro is seen.
-  const onboarded = Boolean(profile?.username && profile.seen_widget_intro_launch);
+  const onboarded = Boolean(profile?.username && profile.seenWidgetIntroLaunch);
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
@@ -50,8 +50,8 @@ function NotConfigured() {
     <Centered>
       <Title>Contact 10</Title>
       <Body muted style={{ textAlign: 'center' }}>
-        Supabase is not configured. Copy .env.example to .env, fill in the project URL and publishable key, then
-        restart the dev server.
+        Firebase is not configured. Copy .env.example to .env, fill in your Firebase web app settings, then restart
+        the dev server.
       </Body>
     </Centered>
   );

@@ -1,77 +1,109 @@
-import type { Session } from '@supabase/supabase-js';
+import { onAuthStateChanged, signOut as firebaseSignOut, type User } from '@firebase/auth';
+import { doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { supabase } from './supabase';
+import { auth, db, functions } from './firebase';
 import type { Profile, ProfilePatch } from './types';
+
+type Result = { error: string | null; code?: string };
 
 type AuthState = {
   ready: boolean;
-  session: Session | null;
+  user: User | null;
   profile: Profile | null;
-  refreshProfile: () => Promise<void>;
-  updateProfile: (patch: ProfilePatch) => Promise<{ error: { code?: string; message: string } | null }>;
+  updateProfile: (patch: ProfilePatch) => Promise<Result>;
+  claimUsername: (username: string) => Promise<Result>;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
 
+const claimUsernameFn = httpsCallable<{ username: string }, { username: string }>(functions, 'claimUsername');
+
+function errorInfo(err: unknown): Result {
+  const e = err as { code?: string; message?: string };
+  return { error: e.message ?? 'Something went wrong.', code: e.code };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [sessionChecked, setSessionChecked] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileFor, setProfileFor] = useState<string | null>(null);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setSessionChecked(true);
-    });
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
-    return () => data.subscription.unsubscribe();
-  }, []);
-
-  const userId = session?.user.id ?? null;
-
-  const refreshProfile = useCallback(async () => {
-    if (!userId) return;
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (!error) setProfile(data as Profile);
-    setProfileFor(userId);
-  }, [userId]);
-
-  useEffect(() => {
-    if (userId) {
-      refreshProfile();
-    } else {
-      setProfile(null);
-      setProfileFor(null);
-    }
-  }, [userId, refreshProfile]);
-
-  const updateProfile = useCallback(
-    async (patch: ProfilePatch) => {
-      if (!userId) return { error: { message: 'Not signed in' } };
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(patch)
-        .eq('id', userId)
-        .select('*')
-        .single();
-      if (!error) setProfile(data as Profile);
-      return { error };
-    },
-    [userId],
+  useEffect(
+    () =>
+      onAuthStateChanged(auth, (next) => {
+        setUser(next);
+        setAuthChecked(true);
+      }),
+    [],
   );
 
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+  const uid = user?.uid ?? null;
+
+  // Live profile. On first sign in the document does not exist yet, so the
+  // app creates it with the defaults the security rules require.
+  useEffect(() => {
+    if (!uid) {
+      setProfile(null);
+      setProfileFor(null);
+      return;
+    }
+    const ref = doc(db, 'users', uid);
+    return onSnapshot(
+      ref,
+      (snap) => {
+        if (snap.exists()) {
+          setProfile(snap.data() as Profile);
+          setProfileFor(uid);
+        } else {
+          setDoc(ref, {
+            username: null,
+            displayName: null,
+            avatarUrl: null,
+            lifetimePoints: 0,
+            activeGameId: null,
+            seenWidgetIntroLaunch: false,
+            seenWidgetIntroFirstScore: false,
+            createdAt: serverTimestamp(),
+          }).catch(() => setProfileFor(uid));
+        }
+      },
+      () => setProfileFor(uid),
+    );
+  }, [uid]);
+
+  const updateProfile = useCallback(
+    async (patch: ProfilePatch): Promise<Result> => {
+      if (!uid) return { error: 'Not signed in.' };
+      try {
+        await updateDoc(doc(db, 'users', uid), patch);
+        return { error: null };
+      } catch (err) {
+        return errorInfo(err);
+      }
+    },
+    [uid],
+  );
+
+  const claimUsername = useCallback(async (username: string): Promise<Result> => {
+    try {
+      await claimUsernameFn({ username });
+      return { error: null };
+    } catch (err) {
+      return errorInfo(err);
+    }
   }, []);
 
-  const ready = sessionChecked && (userId === null || profileFor === userId);
+  const signOut = useCallback(() => firebaseSignOut(auth), []);
+
+  const ready = authChecked && (uid === null || profileFor === uid);
 
   const value = useMemo(
-    () => ({ ready, session, profile, refreshProfile, updateProfile, signOut }),
-    [ready, session, profile, refreshProfile, updateProfile, signOut],
+    () => ({ ready, user, profile, updateProfile, claimUsername, signOut }),
+    [ready, user, profile, updateProfile, claimUsername, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

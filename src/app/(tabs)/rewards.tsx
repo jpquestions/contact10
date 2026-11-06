@@ -6,7 +6,7 @@ import { MILESTONES } from '../../lib/milestones';
 
 export default function Rewards() {
   const { profile } = useAuth();
-  const points = profile?.lifetime_points ?? 0;
+  const points = profile?.lifetimePoints ?? 0;
 
   return (
     <Screen>

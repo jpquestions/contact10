@@ -6,37 +6,57 @@ See [docs/PLAN.md](docs/PLAN.md) for the product and build plan.
 
 ## Stack
 
-Expo (React Native, TypeScript, Expo Router) for the app and Supabase (Postgres, Auth, Row Level Security) for the backend. Home screen widgets will be native WidgetKit and Glance targets.
+Expo (React Native, TypeScript, Expo Router) for the app. Firebase for the backend: Auth, Cloud Firestore with security rules, and Cloud Functions. Home screen widgets will be native WidgetKit and Glance targets.
 
-## Setup
+## Firebase setup (once)
 
-1. Install dependencies: `npm install`
-2. Create a Supabase project, then apply the migrations in `supabase/migrations` in order (Supabase CLI `supabase db push`, or paste them into the SQL editor).
-3. In Supabase, go to Authentication, Emails, and make sure the Magic Link template includes `{{ .Token }}` so sign in emails contain a code.
-4. Copy `.env.example` to `.env` and fill in the project URL and publishable key from Project Settings, API.
-5. Start the app: `npm start`, then open it in Expo Go or a development build.
+1. Create a project at console.firebase.google.com.
+2. Upgrade it to the Blaze plan (Cloud Functions need it) and add a budget alert under Billing, Budgets and alerts. Normal use of this app should stay inside the free allowance.
+3. Build, Authentication: get started and enable Email/Password.
+4. Build, Firestore Database: create a database in production mode.
+5. Project settings, General, Your apps: add a Web app and copy its config values.
+6. Put the project id in `backend/.firebaserc`.
+
+## Run the app
+
+1. `npm install`
+2. Copy `.env.example` to `.env` and fill in the web app config values.
+3. `npm start`, then open it in Expo Go or a development build.
+
+## Deploy the backend
+
+```
+cd backend
+npm install
+npm --prefix functions install
+npx firebase login
+npm run deploy
+```
+
+This deploys the Firestore security rules, indexes and Cloud Functions.
 
 ## Checks
 
 | Command | What it runs |
 | --- | --- |
-| `npm run typecheck` | TypeScript |
+| `npm run typecheck` | TypeScript for the app |
 | `npm test` | Unit tests for scoring rules and milestones |
-| `npm run test:db` | Applies every migration to a throwaway local Postgres and runs the RLS tests in `supabase/tests` |
+| `npm run test:backend` | Starts the Firebase emulators and runs the security rules and Cloud Functions tests |
 
-`test:db` needs the Postgres server binaries (`initdb`, `pg_ctl`) installed locally.
+The backend tests need Java (for the Firestore emulator) and the backend dependencies installed (`npm --prefix backend install` and `npm --prefix backend/functions install`).
 
 ## Layout
 
 ```
-src/app/            screens (Expo Router: every file is a route)
-src/app/(tabs)/     Home, Games, Friends, Rewards, Rules
-src/components/     shared UI
-src/lib/            Supabase client, auth, rules and milestone logic
-supabase/migrations database schema and access rules
-supabase/tests      RLS tests and a local stand in for Supabase auth
+src/app/              screens (Expo Router: every file is a route)
+src/app/(tabs)/       Home, Games, Friends, Rewards, Rules
+src/components/       shared UI
+src/lib/              Firebase client, auth, rules and milestone logic
+backend/firestore.rules   who can read and write what
+backend/functions/    Cloud Functions (TypeScript)
+backend/tests/        emulator tests for rules and functions
 ```
 
 ## Data access rule
 
-Clients read through row level security and only write their own profile fields, rewards, notification read state and push tokens. Every other write (games, invites, points, flags, friendships) goes through database functions, so a client can never edit a score or total directly.
+Clients read through Firestore security rules and only write their own profile fields, rewards, notification read state and push tokens. Every other write (games, invites, points, flags, friendships, usernames) goes through Cloud Functions, so a client can never edit a score or total directly.

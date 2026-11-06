@@ -1,40 +1,75 @@
+import {
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+} from '@firebase/auth';
 import { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Body, Button, Card, Screen } from '../components/ui';
 import { colors, radius, space } from '../components/theme';
-import { supabase } from '../lib/supabase';
+import { auth } from '../lib/firebase';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+type Mode = 'signIn' | 'signUp';
+
+function friendlyError(code: string | undefined): string {
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'Email or password is incorrect.';
+    case 'auth/email-already-in-use':
+      return 'An account already uses that email. Sign in instead.';
+    case 'auth/weak-password':
+      return 'Use a password with at least 8 characters.';
+    case 'auth/invalid-email':
+      return 'Enter a valid email address.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Wait a minute and try again.';
+    case 'auth/network-request-failed':
+      return 'No connection. Check your network and try again.';
+    default:
+      return 'Something went wrong. Try again.';
+  }
+}
+
 export default function SignIn() {
+  const [mode, setMode] = useState<Mode>('signUp');
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  async function sendCode() {
-    const address = email.trim().toLowerCase();
-    if (!EMAIL_PATTERN.test(address)) {
-      setError('Enter a valid email address.');
-      return;
-    }
-    setBusy(true);
+  const address = email.trim().toLowerCase();
+
+  async function submit() {
     setError(null);
-    const { error: err } = await supabase.auth.signInWithOtp({ email: address, options: { shouldCreateUser: true } });
-    setBusy(false);
-    if (err) setError(err.message);
-    else setSentTo(address);
+    setNotice(null);
+    if (!EMAIL_PATTERN.test(address)) return setError('Enter a valid email address.');
+    if (mode === 'signUp' && password.length < 8) return setError('Use a password with at least 8 characters.');
+    setBusy(true);
+    try {
+      // On success the auth listener picks up the user and the router moves on.
+      if (mode === 'signUp') await createUserWithEmailAndPassword(auth, address, password);
+      else await signInWithEmailAndPassword(auth, address, password);
+    } catch (err) {
+      setError(friendlyError((err as { code?: string }).code));
+      setBusy(false);
+    }
   }
 
-  async function verify() {
-    if (!sentTo) return;
-    setBusy(true);
+  async function resetPassword() {
     setError(null);
-    const { error: err } = await supabase.auth.verifyOtp({ email: sentTo, token: code.trim(), type: 'email' });
-    setBusy(false);
-    // On success the auth listener updates the session and the router moves on.
-    if (err) setError('That code did not work. Check it or send a new one.');
+    setNotice(null);
+    if (!EMAIL_PATTERN.test(address)) return setError('Enter your email above first.');
+    try {
+      await sendPasswordResetEmail(auth, address);
+    } catch {
+      // Same message either way so the form does not reveal who has an account.
+    }
+    setNotice(`If ${address} has an account, a reset link is on its way.`);
   }
 
   return (
@@ -45,54 +80,46 @@ export default function SignIn() {
       </View>
 
       <Card>
-        {sentTo === null ? (
-          <>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoComplete="email"
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              returnKeyType="send"
-              onSubmitEditing={sendCode}
-            />
-            <Button label="Send sign in code" onPress={sendCode} loading={busy} />
-          </>
-        ) : (
-          <>
-            <Body muted>We sent a code to {sentTo}.</Body>
-            <TextInput
-              style={[styles.input, styles.code]}
-              value={code}
-              onChangeText={(t) => setCode(t.replace(/\D/g, ''))}
-              placeholder="Code"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="number-pad"
-              autoComplete="one-time-code"
-              textContentType="oneTimeCode"
-              maxLength={10}
-              returnKeyType="done"
-              onSubmitEditing={verify}
-            />
-            <Button label="Sign in" onPress={verify} loading={busy} disabled={code.trim().length < 6} />
-            <Button
-              label="Use a different email"
-              variant="ghost"
-              onPress={() => {
-                setSentTo(null);
-                setCode('');
-                setError(null);
-              }}
-            />
-          </>
-        )}
+        <Text style={styles.label}>Email</Text>
+        <TextInput
+          style={styles.input}
+          value={email}
+          onChangeText={setEmail}
+          placeholder="you@example.com"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoComplete="email"
+          keyboardType="email-address"
+          textContentType="emailAddress"
+        />
+        <Text style={styles.label}>Password</Text>
+        <TextInput
+          style={styles.input}
+          value={password}
+          onChangeText={setPassword}
+          placeholder={mode === 'signUp' ? 'At least 8 characters' : 'Password'}
+          placeholderTextColor={colors.textMuted}
+          secureTextEntry
+          autoComplete={mode === 'signUp' ? 'new-password' : 'current-password'}
+          textContentType={mode === 'signUp' ? 'newPassword' : 'password'}
+          returnKeyType="go"
+          onSubmitEditing={submit}
+        />
+        <Button label={mode === 'signUp' ? 'Create account' : 'Sign in'} onPress={submit} loading={busy} />
         {error && <Text style={styles.error}>{error}</Text>}
+        {notice && <Body muted>{notice}</Body>}
       </Card>
+
+      <Button
+        label={mode === 'signUp' ? 'I already have an account' : 'Create a new account'}
+        variant="ghost"
+        onPress={() => {
+          setMode(mode === 'signUp' ? 'signIn' : 'signUp');
+          setError(null);
+          setNotice(null);
+        }}
+      />
+      {mode === 'signIn' && <Button label="Forgot password" variant="ghost" onPress={resetPassword} />}
     </Screen>
   );
 }
@@ -109,6 +136,5 @@ const styles = StyleSheet.create({
     height: 52,
     fontSize: 17,
   },
-  code: { fontSize: 24, letterSpacing: 6, textAlign: 'center' },
   error: { color: colors.danger, fontSize: 15 },
 });

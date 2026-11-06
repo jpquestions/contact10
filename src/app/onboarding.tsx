@@ -19,7 +19,7 @@ export default function Onboarding() {
 }
 
 function UsernameStep({ onDone }: { onDone: () => void }) {
-  const { updateProfile, signOut } = useAuth();
+  const { claimUsername, signOut } = useAuth();
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,11 +32,11 @@ function UsernameStep({ onDone }: { onDone: () => void }) {
     }
     setBusy(true);
     setError(null);
-    const { error: err } = await updateProfile({ username });
+    const { error: err, code } = await claimUsername(username);
     setBusy(false);
     if (!err) onDone();
-    else if (err.code === '23505') setError('That username is taken.');
-    else setError(err.message);
+    else if (code === 'functions/already-exists') setError('That username is taken.');
+    else setError(err);
   }
 
   return (
@@ -89,7 +89,7 @@ function WidgetStep() {
   async function finish() {
     setBusy(true);
     // Flipping this flag ends onboarding; the root guard moves to the tabs.
-    const { error } = await updateProfile({ seen_widget_intro_launch: true });
+    const { error } = await updateProfile({ seenWidgetIntroLaunch: true });
     if (error) setBusy(false);
   }
 

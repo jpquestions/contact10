@@ -16,3 +16,8 @@ android/
 .env.local
 .env*.local
 supabase/.temp/
+backend/functions/lib/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+.firebase/

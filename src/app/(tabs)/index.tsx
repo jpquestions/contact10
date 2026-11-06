@@ -6,7 +6,7 @@ import { milestoneProgress } from '../../lib/milestones';
 
 export default function Home() {
   const { profile, signOut } = useAuth();
-  const points = profile?.lifetime_points ?? 0;
+  const points = profile?.lifetimePoints ?? 0;
   const progress = milestoneProgress(points);
 
   return (
