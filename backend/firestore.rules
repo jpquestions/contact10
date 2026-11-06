@@ -23,8 +23,15 @@ service cloud.firestore {
       return request.auth.uid;
     }
 
+    // A peer entry counts while it is a friend, a pending request, or a
+    // shared game. Functions keep the fields current.
     function isPeerOf(uid) {
-      return exists(/databases/$(database)/documents/users/$(uid)/peers/$(me()));
+      let path = /databases/$(database)/documents/users/$(uid)/peers/$(me());
+      let peer = get(path).data;
+      return exists(path) && (
+        peer.get('friend', false) == true
+        || peer.get('pending', false) == true
+        || peer.get('games', []).size() > 0);
     }
 
     function pairId(a, b) {
@@ -42,6 +49,18 @@ service cloud.firestore {
 
     function isOptionalString(value, max) {
       return value == null || (value is string && value.size() <= max);
+    }
+
+    function isPrefs(prefs) {
+      let keys = ['invites', 'friendRequests', 'friendMilestones', 'gameTargets', 'gameEnding', 'flags'];
+      return prefs is map
+        && prefs.keys().hasOnly(keys)
+        && prefs.get('invites', true) is bool
+        && prefs.get('friendRequests', true) is bool
+        && prefs.get('friendMilestones', true) is bool
+        && prefs.get('gameTargets', true) is bool
+        && prefs.get('gameEnding', true) is bool
+        && prefs.get('flags', true) is bool;
     }
 
     // ----------------------------------------------------------------------
@@ -70,14 +89,15 @@ service cloud.firestore {
       allow update: if signedIn() && me() == uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'displayName', 'avatarUrl', 'activeGameId',
-             'seenWidgetIntroLaunch', 'seenWidgetIntroFirstScore'])
+             'seenWidgetIntroLaunch', 'seenWidgetIntroFirstScore', 'notificationPrefs'])
         && isOptionalString(request.resource.data.displayName, 40)
         && isOptionalString(request.resource.data.avatarUrl, 500)
         && (request.resource.data.activeGameId == null
             || (request.resource.data.activeGameId is string
                 && isGameMember(request.resource.data.activeGameId)))
         && request.resource.data.seenWidgetIntroLaunch is bool
-        && request.resource.data.seenWidgetIntroFirstScore is bool;
+        && request.resource.data.seenWidgetIntroFirstScore is bool
+        && (!('notificationPrefs' in request.resource.data) || isPrefs(request.resource.data.notificationPrefs));
 
       // Who may see this profile. Maintained by functions.
       match /peers/{peerUid} {
@@ -124,7 +144,7 @@ service cloud.firestore {
     }
 
     match /friendships/{pair} {
-      allow read: if signedIn() && me() in [resource.data.userA, resource.data.userB];
+      allow read: if signedIn() && me() in resource.data.participants;
     }
 
     // ----------------------------------------------------------------------

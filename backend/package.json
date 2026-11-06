@@ -5,7 +5,7 @@
   "scripts": {
     "build": "npm --prefix functions run build",
     "pretest": "npm run build",
-    "test": "firebase emulators:exec --project demo-contact10 --only auth,firestore,functions \"node --test --test-concurrency=1 tests/*.test.ts\"",
+    "test": "firebase emulators:exec --project demo-contact10 --only auth,firestore,functions \"node --test --test-concurrency=1 --test-timeout=120000 tests/*.test.ts\"",
     "deploy": "firebase deploy --only firestore,functions"
   },
   "devDependencies": {

@@ -53,12 +53,14 @@ before(async () => {
       await setDoc(doc(db, `users/${name}`), profile(name));
       await setDoc(doc(db, `usernames/${name}`), { uid: name });
     }
-    for (const [a, b] of [['alice', 'bob'], ['alice', 'carol']]) {
-      await setDoc(doc(db, `users/${a}/peers/${b}`), { friend: a === 'alice' && b === 'bob' });
-      await setDoc(doc(db, `users/${b}/peers/${a}`), { friend: a === 'alice' && b === 'bob' });
-    }
+    await setDoc(doc(db, 'users/alice/peers/bob'), { friend: true });
+    await setDoc(doc(db, 'users/bob/peers/alice'), { friend: true });
+    await setDoc(doc(db, 'users/alice/peers/carol'), { games: ['g1'] });
+    await setDoc(doc(db, 'users/carol/peers/alice'), { games: ['g1'] });
+    // A peer entry left over after leaving every game grants nothing.
+    await setDoc(doc(db, 'users/dave/peers/alice'), { friend: false, pending: false, games: [] });
     await setDoc(doc(db, 'friendships/alice_bob'), {
-      userA: 'alice', userB: 'bob', status: 'accepted', actedBy: 'alice',
+      userA: 'alice', userB: 'bob', participants: ['alice', 'bob'], status: 'accepted', actedBy: 'alice',
     });
     await setDoc(doc(db, 'games/g1'), { name: 'Friday', memberIds: ['alice', 'carol'], createdBy: 'alice' });
     await setDoc(doc(db, 'games/g2'), { name: 'Other', memberIds: ['dave'], createdBy: 'dave' });
@@ -103,8 +105,24 @@ describe('profiles', () => {
     await assertSucceeds(getDoc(doc(db, 'users/bob')));
     await assertSucceeds(getDoc(doc(db, 'users/carol')));
     await assertFails(getDoc(doc(db, 'users/dave')));
+    await assertFails(getDoc(doc(as('alice'), 'users/dave')));
     await assertFails(getDoc(doc(as('carol'), 'users/bob')));
     await assertFails(getDoc(doc(env.unauthenticatedContext().firestore() as unknown as Firestore, 'users/alice')));
+  });
+
+  test('notification settings accept known switches only', async () => {
+    const db = as('alice');
+    await assertSucceeds(updateDoc(doc(db, 'users/alice'), { notificationPrefs: { invites: false, flags: true } }));
+    await assertFails(updateDoc(doc(db, 'users/alice'), { notificationPrefs: { spam: true } }));
+    await assertFails(updateDoc(doc(db, 'users/alice'), { notificationPrefs: { invites: 'no' } }));
+  });
+
+  test('friend lists can be queried by participant', async () => {
+    const mine = await assertSucceeds(
+      getDocs(query(collection(as('bob'), 'friendships'), where('participants', 'array-contains', 'bob'))),
+    );
+    if (mine.size !== 1) throw new Error('expected one friendship for bob');
+    await assertFails(getDocs(collection(as('dave'), 'friendships')));
   });
 
   test('peer lists are private to their owner', async () => {
