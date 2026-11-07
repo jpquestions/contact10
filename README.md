@@ -25,7 +25,7 @@ Run these from the repository root on a computer with Node 22. EAS builds in the
 
 1. `npx eas-cli@latest login` with your Expo account.
 2. `npx eas-cli@latest init` links the project to Expo and writes `extra.eas.projectId` (and `owner`) into `app.json`. Commit that change: push notifications need the project id.
-3. Add your Apple Team ID to `app.json` as `expo.ios.appleTeamId` (developer.apple.com, Account, Membership details).
+3. The Apple Team ID (`A4SBA97J6N`) is already set in `app.json` as `expo.ios.appleTeamId`.
 4. `npx eas-cli@latest build --platform ios --profile production --auto-submit`. Sign in with your Apple developer account when asked and let EAS create the certificates, provisioning profiles (for the app and the widget), and the push notification key. `--auto-submit` uploads the build to App Store Connect.
 5. In App Store Connect, open the app, go to TestFlight, and add testers once the build finishes processing.
 
