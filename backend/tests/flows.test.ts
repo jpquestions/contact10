@@ -209,6 +209,14 @@ describe('game flow', () => {
     assert.equal(await code(dave.call('sendFriendRequest', { username: alice.username })), 'functions/failed-precondition');
   });
 
+  test('anyone can report a user or game, and reports stay private', async () => {
+    await carol.call('reportContent', { targetType: 'user', targetId: bob.uid, reason: 'harassment', details: 'Rude' });
+    await carol.call('reportContent', { targetType: 'game', targetId: gameId, reason: 'spam' });
+    assert.equal(await code(carol.call('reportContent', { targetType: 'user', targetId: carol.uid, reason: 'spam' })), 'functions/invalid-argument');
+    assert.equal(await code(carol.call('reportContent', { targetType: 'user', targetId: bob.uid, reason: 'nope' })), 'functions/invalid-argument');
+    assert.equal(await canRead(carol, `reports/${carol.uid}_user_${bob.uid}`), false);
+  });
+
   test('deleting an account removes the profile and username', async () => {
     await dave.call('deleteAccount');
     const lookup = await getDoc(doc(alice.db, `usernames/${dave.username}`));
