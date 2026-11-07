@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "100319233016",
+    "project_id": "contact-10-1c0fd",
+    "storage_bucket": "contact-10-1c0fd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:100319233016:android:5b3a4e89ab8966faa48c0d",
+        "android_client_info": {
+          "package_name": "com.jpquestions.contact10"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDxY0LtWsqbLrw23q_0x92nv7yY-j_g8PA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
