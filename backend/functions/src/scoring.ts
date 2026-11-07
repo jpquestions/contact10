@@ -174,9 +174,10 @@ export const addPoints = onCall(async (request) => {
 
 /**
  * Changes the amount of your own entry, or deletes it when the new amount is
- * zero. Allowed for 24 hours after logging, while its game is still live, and
- * never once the entry has been flagged. Milestones and game targets follow the
- * corrected total, so points added by accident earn nothing.
+ * zero. Allowed for 24 hours after logging, even after its game has ended (the
+ * same window others have to flag it), and never once the entry has been
+ * flagged. Milestones and game targets follow the corrected total, so points
+ * added by accident earn nothing.
  */
 async function changeEntry(uid: string, entryId: string, newAmount: number) {
   const result = await db().runTransaction(async (tx) => {
@@ -194,7 +195,6 @@ async function changeEntry(uid: string, entryId: string, newAmount: number) {
     let members: QuerySnapshot | null = null;
     if (gameId) {
       [game, members] = await Promise.all([tx.get(db().doc(`games/${gameId}`)), tx.get(db().collection(`games/${gameId}/members`))]);
-      if (!isLive(game)) throw new HttpsError('failed-precondition', 'That game is over, so its entries can no longer be changed.');
     }
 
     const oldAmount = entry.get('amount') as number;

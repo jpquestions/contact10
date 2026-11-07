@@ -225,9 +225,12 @@ describe('game flow', () => {
   });
 
   test('only the creator ends a game, and ended games take no points', async () => {
+    const late = await alice.call<{ entryId: string }>('addPoints', { gameId, amount: 6 });
     assert.equal(await code(bob.call('endGame', { gameId })), 'functions/permission-denied');
     await alice.call('endGame', { gameId });
     assert.equal(await code(bob.call('addPoints', { gameId, amount: 1 })), 'functions/failed-precondition');
+    const fixed = await alice.call<{ gamePoints: number }>('editPoints', { entryId: late.entryId, amount: 3 });
+    assert.equal(fixed.gamePoints, 3, 'your own points can still be fixed right after a game ends');
     assert.equal((await inbox(bob, 'game_ended')).length, 1);
   });
 

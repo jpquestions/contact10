@@ -37,7 +37,7 @@ export default function EditEntry() {
   }
 
   const amount = value ?? entry.amount;
-  const editable = canEditEntry(entry, game);
+  const editable = canEditEntry(entry);
   const clamp = (n: number) => Math.min(MAX_ENTRY, Math.max(MIN_ENTRY, n));
   const where = entry.gameId ? (game?.name ?? 'a game') : 'Personal';
 
@@ -69,8 +69,11 @@ export default function EditEntry() {
       </Body>
       {!editable ? (
         <Body muted>
-          This entry can no longer be changed. You can edit or delete your own points for 24 hours while the game is live, as long as they have not been
-          flagged.
+          {entry.flagStatus
+            ? 'This entry was flagged, so only the game creator can change it now.'
+            : entry.deletedAt
+              ? 'This entry was deleted.'
+              : 'This entry is more than 24 hours old, so it can no longer be changed.'}
         </Body>
       ) : (
         <>

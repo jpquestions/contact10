@@ -68,28 +68,22 @@ export default function Home() {
       {recent.length > 0 && (
         <>
           <SectionTitle>Your recent points</SectionTitle>
-          <Body muted style={{ fontSize: 13, marginTop: -space.sm }}>Your lifetime total is the sum of these. Added too many by accident? Tap Edit to fix or delete them.</Body>
+          <Body muted style={{ fontSize: 13, marginTop: -space.sm }}>Your lifetime total is the sum of these. Added some by accident? Tap Edit to fix or delete them within 24 hours.</Body>
           <Card style={{ gap: 0 }}>
-            {recent.map((e) => {
-              const game = e.gameId ? (games.find((g) => g.id === e.gameId) ?? null) : null;
-              const editable = canEditEntry(e, game);
-              return (
-                <Row key={e.id}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.entry}>+{e.amount}</Text>
-                    <Text style={styles.entryMeta}>
-                      {gameName(e.gameId)} · {timeAgo(e.createdAt)}
-                      {e.editedAt ? ' · edited' : ''}
-                    </Text>
-                  </View>
-                  {editable && (
-                    <Pressable onPress={() => router.push(`/entry/${e.id}`)} accessibilityRole="button" accessibilityLabel={`Edit your ${e.amount} points`} hitSlop={8}>
-                      <Text style={styles.link}>Edit</Text>
-                    </Pressable>
-                  )}
-                </Row>
-              );
-            })}
+            {recent.map((e) => (
+              <Row key={e.id} onPress={() => router.push(`/entry/${e.id}`)} accessibilityLabel={`${e.amount} points in ${gameName(e.gameId)}. Edit`}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.entry}>+{e.amount}</Text>
+                  <Text style={styles.entryMeta}>
+                    {gameName(e.gameId)} · {timeAgo(e.createdAt)}
+                    {e.editedAt ? ' · edited' : ''}
+                  </Text>
+                </View>
+                <View style={styles.editPill}>
+                  <Text style={styles.editText}>{canEditEntry(e) ? 'Edit' : 'View'}</Text>
+                </View>
+              </Row>
+            ))}
           </Card>
         </>
       )}
@@ -148,4 +142,6 @@ const styles = StyleSheet.create({
   link: { color: colors.accent, fontSize: 15, fontWeight: '700' },
   entry: { color: colors.text, fontSize: 17, fontWeight: '800' },
   entryMeta: { color: colors.textMuted, fontSize: 13 },
+  editPill: { backgroundColor: colors.surfaceRaised, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 6 },
+  editText: { color: colors.accent, fontSize: 14, fontWeight: '800' },
 });

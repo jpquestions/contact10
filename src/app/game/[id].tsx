@@ -196,7 +196,7 @@ export default function GameScreen() {
             entry={e}
             isMine={e.userId === uid}
             canFlag={canFlag(game)}
-            canEdit={e.userId === uid && canEditEntry(e, game)}
+            canEdit={e.userId === uid && canEditEntry(e)}
             onEdit={() => router.push(`/entry/${e.id}`)}
             onFlag={() => setFlagging(e)}
           />

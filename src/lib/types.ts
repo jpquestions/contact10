@@ -72,11 +72,10 @@ export type Entry = {
 /** How long after logging an entry its owner can still edit or delete it. */
 export const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-/** Whether you can still edit or delete your own entry. */
-export function canEditEntry(entry: Entry, game: Pick<Game, 'status' | 'startsAt' | 'endsAt'> | null, now = Date.now()): boolean {
+/** Whether you can still edit or delete your own entry: 24 hours after logging, unless flagged. */
+export function canEditEntry(entry: Entry, now = Date.now()): boolean {
   if (entry.deletedAt || entry.flagStatus) return false;
-  if (!entry.createdAt || now - entry.createdAt.toMillis() > EDIT_WINDOW_MS) return false;
-  return entry.gameId === null || (game !== null && isLive(game, now));
+  return Boolean(entry.createdAt) && now - entry.createdAt!.toMillis() <= EDIT_WINDOW_MS;
 }
 
 export type Flag = {
