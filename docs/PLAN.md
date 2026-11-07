@@ -28,6 +28,7 @@ The Rules page is static content shipped with the app, reachable from the main t
 | Single night | Starts when created, ends 6:00 AM local next morning | Creator can adjust the end time |
 | Weekend | Friday 5:00 PM to Sunday 11:59 PM local | Picks the upcoming or current weekend |
 | Ongoing | No end | Creator can end it manually at any time |
+| Custom dates | First day to last day, picked on a calendar | Up to a year long, can start up to a year ahead |
 
 Once a game ends it becomes read only: the leaderboard is frozen and visible in history.
 
@@ -62,7 +63,7 @@ Users can be in several games at once. The one they opened most recently is thei
 
 In app: a scoring panel on the Home screen and on each game screen with five quick add buttons (1, 2, 3, 6, 10) plus a "Custom" button that opens a 1 to 100 stepper or slider. A game picker sits above the buttons (defaults to active game, with a "No game" option).
 
-Undo: every entry shows an undo toast for 10 seconds, and users can delete their own entries from a game's feed for 5 minutes after logging. After that the entry is locked.
+Undo and edit: every entry shows an undo toast for 10 seconds. Users can edit the amount of, or delete, their own entries for 24 hours while the game is live (from the game feed or Home's recent points). Edits show "edited from N" in the feed so game mates can flag them. Milestones and targets follow the corrected total, so points added by accident earn nothing. Flagged entries cannot be edited.
 
 Home screen widgets (the main convenience feature):
 
@@ -216,7 +217,7 @@ Widget taps call `addPoints` directly using the shared session. If the device is
 
 **Phase 4, friends and notifications (about 2 weeks).** *Built. Push delivery needs the EAS project id.* Friend requests and list, push token registration, notification functions with recipient dedupe, inbox, Settings toggles.
 
-**Phase 5, widgets (about 2 weeks).** *iOS built (Quick Add, Score, Leaderboard, offline queue, both popups). Android widget not started.* iOS WidgetKit Quick Add, Score and Leaderboard widgets with App Intents; Android Glance equivalents; offline queue; both widget discovery popups.
+**Phase 5, widgets (about 2 weeks).** *Built for iOS and Android (Quick Add, Score, Leaderboard, offline queue, both popups). Tap the widget's title to switch between live games and Personal.* iOS WidgetKit Quick Add, Score and Leaderboard widgets with App Intents; Android Glance equivalents; offline queue; both widget discovery popups.
 
 **Phase 6, polish and launch (about 1 week).** *App icon, haptics, account deletion and EAS config done. Apple and Google sign in not started.* Empty states, haptics and sounds on scoring, app icons and store listings, TestFlight and internal Android testing.
 

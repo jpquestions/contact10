@@ -31,6 +31,18 @@ Run these from the repository root on a computer with Node 22. EAS builds in the
 
 Bundle ID: `com.jpquestions.contact10` (widget: `com.jpquestions.contact10.widget`). App Group: `group.com.jpquestions.contact10`.
 
+## Android
+
+Test on your phone with an installable APK (no Play Store needed):
+
+```
+npx eas-cli@latest build --platform android --profile preview
+```
+
+Open the link EAS prints on your Android phone and install it. For the Play Store, build with `--profile production` (an AAB) and upload it to a Google Play Console internal testing track; the first upload has to be done by hand in the Play Console.
+
+Push notifications on Android need `google-services.json` (from the Firebase Android app) referenced in `app.json`, plus an FCM V1 service account key uploaded with `npx eas-cli@latest credentials`.
+
 ## Deploy the backend
 
 ```
@@ -59,6 +71,8 @@ The backend tests need Java (for the Firestore emulator) and the backend depende
 src/app/              screens (Expo Router: every file is a route)
 src/app/(tabs)/       Home, Games, Friends, Rewards, Rules
 src/app/game/         game screen and new game form
+src/widget/core.ts    widget logic shared by both platforms
+src/widget/android/   Android home screen widgets
 targets/widget/       iOS home screen widgets (SwiftUI, App Intents)
 src/components/       shared UI
 src/lib/              Firebase client, auth, rules and milestone logic

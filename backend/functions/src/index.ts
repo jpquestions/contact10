@@ -20,6 +20,6 @@ export {
   respondToInvite,
 } from './games';
 export { gameClock } from './scheduled';
-export { addPoints, removePoints } from './scoring';
+export { addPoints, editPoints, removePoints } from './scoring';
 export { reportContent } from './reports';
 export { claimUsername } from './usernames';

@@ -58,7 +58,7 @@ export function ScoringProvider({ children }: { children: ReactNode }) {
     if (!uid || flushing.current) return;
     flushing.current = true;
     try {
-      const fromWidget: Pending[] = takePendingWidgetEntries().map((e) => ({ ...e, source: 'widget' }));
+      const fromWidget: Pending[] = (await takePendingWidgetEntries()).map((e) => ({ ...e, source: 'widget' }));
       const queued: Pending[] = [...(await readQueue()), ...fromWidget];
       const left: Pending[] = [];
       for (const item of queued) {

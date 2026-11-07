@@ -2,6 +2,7 @@ import { collection, documentId, getDocs, limit, query, where } from 'firebase/f
 import { useEffect, useMemo, useState } from 'react';
 import { ActionSheetIOS, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Badge, ErrorText, Field, Row, SectionTitle } from '../../components/controls';
+import { ReportSheet, type ReportTarget } from '../../components/ReportSheet';
 import { Body, Card, Screen, Title } from '../../components/ui';
 import { colors, space } from '../../components/theme';
 import { api, errorMessage } from '../../lib/api';
@@ -18,6 +19,7 @@ export default function Friends() {
   const [results, setResults] = useState<{ username: string; uid: string }[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reporting, setReporting] = useState<ReportTarget | null>(null);
 
   const other = (p: { userA: string; userB: string }) => (p.userA === uid ? p.userB : p.userA);
   const friends = pairs.filter((p) => p.status === 'accepted');
@@ -65,15 +67,17 @@ export default function Friends() {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Block', style: 'destructive', onPress: () => act(() => api.blockUser({ userId: friendId }), `Blocked @${name}.`) },
       ]);
+    const report = () => setReporting({ type: 'user', id: friendId, label: `@${name}` });
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
-        { title: `@${name}`, options: ['Remove friend', 'Block', 'Cancel'], destructiveButtonIndex: [0, 1], cancelButtonIndex: 2 },
-        (i) => (i === 0 ? remove() : i === 1 ? block() : undefined),
+        { title: `@${name}`, options: ['Remove friend', 'Block', 'Report', 'Cancel'], destructiveButtonIndex: [0, 1], cancelButtonIndex: 3 },
+        (i) => (i === 0 ? remove() : i === 1 ? block() : i === 2 ? report() : undefined),
       );
     } else {
       Alert.alert(`@${name}`, undefined, [
         { text: 'Remove friend', onPress: remove },
         { text: 'Block', style: 'destructive', onPress: block },
+        { text: 'Report', onPress: report },
         { text: 'Cancel', style: 'cancel' },
       ]);
     }
@@ -174,8 +178,9 @@ export default function Friends() {
         </>
       )}
       <Body muted style={{ fontSize: 13 }}>
-        Signed in as @{profile?.username}. Only friends and people in your games can see your points.
+        Signed in as @{profile?.username}. Only friends and people in your games can see your points. Tap a friend to remove, block or report.
       </Body>
+      <ReportSheet target={reporting} onClose={() => setReporting(null)} />
     </Screen>
   );
 }

@@ -24,7 +24,27 @@ export function gameStatusLine(game: Game, now = Date.now()): string {
   return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
 }
 
-export const GAME_TYPE_LABEL = { night: 'Single night', weekend: 'Weekend', ongoing: 'Ongoing' } as const;
+export const GAME_TYPE_LABEL = { night: 'Single night', weekend: 'Weekend', ongoing: 'Ongoing', custom: 'Custom dates' } as const;
+
+/** Midnight at the start of a local day. */
+export function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+/** 11:59 PM at the end of a local day. */
+export function endOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(23, 59, 0, 0);
+  return x;
+}
+
+/** A custom range runs from the start of the first day (or now, if that is today) to the end of the last day. */
+export function customWindow(first: Date, last: Date, now = new Date()): { start: Date; end: Date } {
+  const start = startOfDay(first);
+  return { start: start.getTime() < now.getTime() ? now : start, end: endOfDay(last) };
+}
 
 /** 6:00 AM tomorrow, local time. */
 export function defaultNightEnd(now = new Date()): Date {

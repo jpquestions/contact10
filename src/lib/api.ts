@@ -6,7 +6,7 @@ function fn<In extends Record<string, unknown>, Out = { ok: true }>(name: string
   return async (data: In): Promise<Out> => (await callable(data)).data;
 }
 
-export type GameType = 'night' | 'weekend' | 'ongoing';
+export type GameType = 'night' | 'weekend' | 'ongoing' | 'custom';
 export type RewardMode = 'first' | 'everyone';
 
 export type AddPointsResult = {
@@ -19,10 +19,22 @@ export type AddPointsResult = {
   wonGame: boolean;
 };
 
+export type ChangeResult = {
+  lifetimePoints: number;
+  gamePoints: number | null;
+  unlocked: number[];
+  reachedTarget: boolean;
+  wonGame: boolean;
+};
+
+export type ReportReason = 'harassment' | 'hate' | 'sexual' | 'spam' | 'cheating' | 'other';
+
 export const api = {
   claimUsername: fn<{ username: string }, { username: string }>('claimUsername'),
   addPoints: fn<{ entryId: string; gameId: string | null; amount: number; source: 'app' | 'widget' }, AddPointsResult>('addPoints'),
-  removePoints: fn<{ entryId: string }, { lifetimePoints: number; gamePoints: number | null }>('removePoints'),
+  removePoints: fn<{ entryId: string }, ChangeResult>('removePoints'),
+  editPoints: fn<{ entryId: string; amount: number }, ChangeResult>('editPoints'),
+  reportContent: fn<{ targetType: 'user' | 'game'; targetId: string; reason: ReportReason; details: string | null }>('reportContent'),
   createGame: fn<
     {
       name: string;

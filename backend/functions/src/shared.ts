@@ -4,10 +4,13 @@ export const MILESTONES = [10, 50, 100, 200, 300, 400, 500, 1000, 2500, 5000, 10
 export const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
 export const MIN_ENTRY = 1;
 export const MAX_ENTRY = 100;
-export const UNDO_WINDOW_MS = 5 * 60 * 1000;
+/** How long after logging you can still edit or delete your own entry. */
+export const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 export const FLAG_WINDOW_AFTER_END_MS = 24 * 60 * 60 * 1000;
 export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const MAX_GAME_LENGTH_MS = 8 * 24 * 60 * 60 * 1000;
+/** Custom date range games can run up to a year and be scheduled up to a year ahead. */
+export const MAX_CUSTOM_GAME_MS = 366 * 24 * 60 * 60 * 1000;
 export const MAX_MEMBERS = 50;
 
 export const NOTIFICATION_PREFS = [

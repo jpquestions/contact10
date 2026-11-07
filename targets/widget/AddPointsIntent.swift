@@ -19,18 +19,20 @@ struct AddPointsIntent: AppIntent {
   func perform() async throws -> some IntentResult {
     guard var state = Store.load() else { return .result() }
     let before = state
+    let gameId = state.target(chosen: Store.chosenTarget).gameId
 
     // Show the new total right away; the server result replaces it.
-    state.lifetimePoints += amount
-    if let points = state.gamePoints { state.gamePoints = points + amount }
+    state.add(amount, to: gameId)
     Store.save(state)
     Store.defaults?.removeObject(forKey: "lastError")
 
-    let entry = PendingEntry(entryId: UUID().uuidString.lowercased(), gameId: state.activeGameId, amount: amount)
+    let entry = PendingEntry(entryId: UUID().uuidString.lowercased(), gameId: gameId, amount: amount)
     do {
       let result = try await Api.addPoints(state, entry)
       state.lifetimePoints = result.lifetimePoints
-      if let points = result.gamePoints { state.gamePoints = points }
+      if let gameId, let points = result.gamePoints, let i = state.games.firstIndex(where: { $0.id == gameId }) {
+        state.games[i].points = points
+      }
       Store.save(state)
       await deliverPending(state)
     } catch ApiError.network {
@@ -58,5 +60,20 @@ struct AddPointsIntent: AppIntent {
       }
     }
     Store.setPending(left)
+  }
+}
+
+/// Runs when the widget's title is tapped: switches between live games and Personal.
+struct CycleTargetIntent: AppIntent {
+  static let title: LocalizedStringResource = "Switch game"
+  static let description = IntentDescription("Switches the Contact 10 widget between your live games and Personal.")
+
+  init() {}
+
+  func perform() async throws -> some IntentResult {
+    guard let state = Store.load() else { return .result() }
+    Store.chosenTarget = state.nextTargetId(after: state.target(chosen: Store.chosenTarget))
+    Store.defaults?.removeObject(forKey: "lastError")
+    return .result()
   }
 }

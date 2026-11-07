@@ -3,7 +3,7 @@ import { FieldValue, Timestamp, type DocumentSnapshot, type QuerySnapshot, type 
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { isLive, requireMember } from './games';
 import { friendIds, notify } from './notify';
-import { MAX_ENTRY, MIN_ENTRY, UNDO_WINDOW_MS, crossedMilestones } from './shared';
+import { EDIT_WINDOW_MS, MAX_ENTRY, MILESTONES, MIN_ENTRY, crossedMilestones } from './shared';
 import { db, id, input, int, oneOf, requireUid } from './util';
 
 /**
@@ -30,6 +30,50 @@ export function recomputeTarget(
       winnerId: next ? next.id : null,
       wonAt: next ? next.get('reachedTargetAt') : null,
     });
+  }
+}
+
+/** Tells friends about milestones and the game about its target. */
+async function announce(
+  uid: string,
+  user: DocumentSnapshot,
+  game: DocumentSnapshot | null,
+  result: { unlocked: number[]; reachedTarget: boolean; wonGame: boolean },
+) {
+  const who = `@${user.get('username')}`;
+  if (result.unlocked.length) {
+    const friends = await friendIds(uid);
+    for (const m of result.unlocked) {
+      await notify(
+        friends,
+        {
+          kind: 'friend_milestone',
+          pref: 'friendMilestones',
+          title: `${who} hit ${m.toLocaleString('en-US')}`,
+          body: `${who} just reached the ${m.toLocaleString('en-US')} point milestone.`,
+          data: { userId: uid, threshold: String(m) },
+        },
+        uid,
+      );
+    }
+  }
+  if (game && result.reachedTarget) {
+    const everyone = game.get('rewardMode') === 'everyone';
+    if (everyone || result.wonGame) {
+      await notify(
+        game.get('memberIds') as string[],
+        {
+          kind: 'game_target',
+          pref: 'gameTargets',
+          title: game.get('name') as string,
+          body: everyone
+            ? `${who} reached ${game.get('targetPoints')} and earned: ${game.get('rewardText')}`
+            : `${who} reached ${game.get('targetPoints')} first and wins: ${game.get('rewardText')}`,
+          data: { gameId: game.id },
+        },
+        uid,
+      );
+    }
   }
 }
 
@@ -114,38 +158,7 @@ export const addPoints = onCall(async (request) => {
 
   if (!result.duplicate) {
     const { game, user } = result as typeof result & { game: DocumentSnapshot | null; user: DocumentSnapshot };
-    const who = `@${user.get('username')}`;
-    for (const m of result.unlocked) {
-      await notify(
-        await friendIds(uid),
-        {
-          kind: 'friend_milestone',
-          pref: 'friendMilestones',
-          title: `${who} hit ${m.toLocaleString('en-US')}`,
-          body: `${who} just reached the ${m.toLocaleString('en-US')} point milestone.`,
-          data: { userId: uid, threshold: String(m) },
-        },
-        uid,
-      );
-    }
-    if (game && result.reachedTarget) {
-      const everyone = game.get('rewardMode') === 'everyone';
-      if (everyone || result.wonGame) {
-        await notify(
-          game.get('memberIds') as string[],
-          {
-            kind: 'game_target',
-            pref: 'gameTargets',
-            title: game.get('name') as string,
-            body: everyone
-              ? `${who} reached ${game.get('targetPoints')} and earned: ${game.get('rewardText')}`
-              : `${who} reached ${game.get('targetPoints')} first and wins: ${game.get('rewardText')}`,
-            data: { gameId: game.id },
-          },
-          uid,
-        );
-      }
-    }
+    await announce(uid, user, game, result);
   }
 
   return {
@@ -159,42 +172,93 @@ export const addPoints = onCall(async (request) => {
   };
 });
 
-/** Undo your own entry within five minutes of logging it. */
-export const removePoints = onCall(async (request) => {
-  const uid = requireUid(request);
-  const entryId = id(input(request), 'entryId')!;
-
-  return db().runTransaction(async (tx) => {
+/**
+ * Changes the amount of your own entry, or deletes it when the new amount is
+ * zero. Allowed for 24 hours after logging, while its game is still live, and
+ * never once the entry has been flagged. Milestones and game targets follow the
+ * corrected total, so points added by accident earn nothing.
+ */
+async function changeEntry(uid: string, entryId: string, newAmount: number) {
+  const result = await db().runTransaction(async (tx) => {
     const entryRef = db().doc(`entries/${entryId}`);
     const entry = await tx.get(entryRef);
     if (!entry.exists || entry.get('userId') !== uid) throw new HttpsError('not-found', 'Entry not found.');
     if (entry.get('deletedAt') !== null) throw new HttpsError('failed-precondition', 'That entry was already removed.');
-    if (entry.get('flagStatus') === 'pending') throw new HttpsError('failed-precondition', 'That entry is waiting on a flag review.');
+    if (entry.get('flagStatus') !== null) throw new HttpsError('failed-precondition', 'Flagged entries cannot be changed.');
     const created = (entry.get('createdAt') as Timestamp).toMillis();
-    if (Date.now() - created > UNDO_WINDOW_MS) throw new HttpsError('failed-precondition', 'Entries can only be undone for 5 minutes.');
+    if (Date.now() - created > EDIT_WINDOW_MS) throw new HttpsError('failed-precondition', 'Entries can only be changed for 24 hours.');
 
-    const amount = entry.get('amount') as number;
     const gameId = entry.get('gameId') as string | null;
     const user = await tx.get(db().doc(`users/${uid}`));
     let game: DocumentSnapshot | null = null;
     let members: QuerySnapshot | null = null;
     if (gameId) {
       [game, members] = await Promise.all([tx.get(db().doc(`games/${gameId}`)), tx.get(db().collection(`games/${gameId}/members`))]);
+      if (!isLive(game)) throw new HttpsError('failed-precondition', 'That game is over, so its entries can no longer be changed.');
     }
 
-    const lifetimePoints = Math.max(0, (user.get('lifetimePoints') as number) - amount);
-    tx.update(entryRef, { deletedAt: FieldValue.serverTimestamp() });
+    const oldAmount = entry.get('amount') as number;
+    const delta = newAmount - oldAmount;
+    const before = user.get('lifetimePoints') as number;
+    const lifetimePoints = Math.max(0, before + delta);
+
+    if (newAmount === 0) {
+      tx.update(entryRef, { deletedAt: FieldValue.serverTimestamp() });
+    } else {
+      tx.update(entryRef, {
+        amount: newAmount,
+        editedAt: FieldValue.serverTimestamp(),
+        originalAmount: entry.get('originalAmount') ?? oldAmount,
+      });
+    }
     tx.update(user.ref, { lifetimePoints });
 
+    const unlocked = delta > 0 ? crossedMilestones(before, lifetimePoints) : [];
+    for (const m of unlocked) tx.set(db().doc(`users/${uid}/unlocks/${m}`), { reachedAt: FieldValue.serverTimestamp() });
+    if (delta < 0) {
+      for (const m of MILESTONES) if (m > lifetimePoints && m <= before) tx.delete(db().doc(`users/${uid}/unlocks/${m}`));
+    }
+
     let gamePoints: number | null = null;
+    let reachedTarget = false;
+    let wonGame = false;
     const member = members?.docs.find((m) => m.id === uid);
     if (game?.exists && members && member) {
-      gamePoints = Math.max(0, (member.get('points') as number) - amount);
+      gamePoints = Math.max(0, (member.get('points') as number) + delta);
       tx.update(member.ref, { points: gamePoints });
-      recomputeTarget(tx, game, members, uid, gamePoints);
+      if (delta < 0) {
+        recomputeTarget(tx, game, members, uid, gamePoints);
+      } else if (member.get('reachedTargetAt') === null && gamePoints >= (game.get('targetPoints') as number)) {
+        reachedTarget = true;
+        tx.update(member.ref, { reachedTargetAt: FieldValue.serverTimestamp() });
+        if (game.get('rewardMode') === 'first' && game.get('winnerId') === null) {
+          wonGame = true;
+          tx.update(game.ref, { winnerId: uid, wonAt: FieldValue.serverTimestamp() });
+        }
+      }
     }
-    return { lifetimePoints, gamePoints };
+    return { lifetimePoints, gamePoints, unlocked, reachedTarget, wonGame, user, game };
   });
+
+  await announce(uid, result.user, result.game, result);
+  return {
+    lifetimePoints: result.lifetimePoints,
+    gamePoints: result.gamePoints,
+    unlocked: result.unlocked,
+    reachedTarget: result.reachedTarget,
+    wonGame: result.wonGame,
+  };
+}
+
+/** Delete your own entry (undo, or points added by accident). */
+export const removePoints = onCall(async (request) => {
+  const uid = requireUid(request);
+  return changeEntry(uid, id(input(request), 'entryId')!, 0);
 });
 
-
+/** Correct the amount of your own entry. */
+export const editPoints = onCall(async (request) => {
+  const uid = requireUid(request);
+  const data = input(request);
+  return changeEntry(uid, id(data, 'entryId')!, int(data, 'amount', MIN_ENTRY, MAX_ENTRY));
+});

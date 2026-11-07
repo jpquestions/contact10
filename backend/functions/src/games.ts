@@ -3,10 +3,10 @@ import { FieldValue, Timestamp, type DocumentSnapshot, type Transaction } from '
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { notify } from './notify';
 import { addSharedGame, removeSharedGame } from './peers';
-import { INVITE_TTL_MS, MAX_GAME_LENGTH_MS, MAX_MEMBERS, pairId } from './shared';
+import { INVITE_TTL_MS, MAX_CUSTOM_GAME_MS, MAX_GAME_LENGTH_MS, MAX_MEMBERS, pairId } from './shared';
 import { bool, db, id, input, int, oneOf, requireUid, str } from './util';
 
-const GAME_TYPES = ['night', 'weekend', 'ongoing'] as const;
+const GAME_TYPES = ['night', 'weekend', 'ongoing', 'custom'] as const;
 const REWARD_MODES = ['first', 'everyone'] as const;
 
 /** Whether a game currently accepts points. */
@@ -53,13 +53,17 @@ export const createGame = onCall(async (request) => {
   const now = Date.now();
   const startsAtMs = typeof data.startsAt === 'number' ? data.startsAt : now;
   const endsAtMs = typeof data.endsAt === 'number' ? data.endsAt : null;
-  if (startsAtMs < now - 5 * 60 * 1000 || startsAtMs > now + MAX_GAME_LENGTH_MS) {
+  const maxLength = type === 'custom' ? MAX_CUSTOM_GAME_MS : MAX_GAME_LENGTH_MS;
+  if (startsAtMs < now - 5 * 60 * 1000 || startsAtMs > now + maxLength) {
     throw new HttpsError('invalid-argument', 'Start time is not valid.');
   }
   if (type === 'ongoing') {
     if (endsAtMs !== null) throw new HttpsError('invalid-argument', 'Ongoing games have no end time.');
-  } else if (endsAtMs === null || endsAtMs <= Math.max(now, startsAtMs) || endsAtMs - startsAtMs > MAX_GAME_LENGTH_MS) {
-    throw new HttpsError('invalid-argument', 'End time must be after the start and within 8 days.');
+  } else if (endsAtMs === null || endsAtMs <= Math.max(now, startsAtMs) || endsAtMs - startsAtMs > maxLength) {
+    throw new HttpsError(
+      'invalid-argument',
+      type === 'custom' ? 'The end date must be after the start and within a year.' : 'End time must be after the start and within 8 days.',
+    );
   }
 
   const user = await db().doc(`users/${uid}`).get();

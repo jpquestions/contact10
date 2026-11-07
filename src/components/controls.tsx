@@ -32,7 +32,9 @@ export function Segmented<T extends string>({
             onPress={() => onChange(o.value)}
             style={[styles.segment, on && styles.segmentOn]}
           >
-            <Text style={[styles.segmentText, on && styles.segmentTextOn]}>{o.label}</Text>
+            <Text style={[styles.segmentText, on && styles.segmentTextOn]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85}>
+              {o.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -106,9 +108,17 @@ const styles = StyleSheet.create({
   },
   multiline: { minHeight: 90, paddingTop: space.md, textAlignVertical: 'top' },
   segmented: { flexDirection: 'row', backgroundColor: colors.surfaceRaised, borderRadius: radius.md, padding: 3 },
-  segment: { flex: 1, paddingVertical: 10, borderRadius: radius.sm, alignItems: 'center' },
+  segment: {
+    flex: 1,
+    minHeight: 44,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   segmentOn: { backgroundColor: colors.accent },
-  segmentText: { color: colors.textMuted, fontWeight: '700', fontSize: 14 },
+  segmentText: { color: colors.textMuted, fontWeight: '700', fontSize: 14, textAlign: 'center' },
   segmentTextOn: { color: colors.accentText },
   chip: {
     paddingHorizontal: space.md,

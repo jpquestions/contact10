@@ -1,8 +1,10 @@
 import * as Clipboard from 'expo-clipboard';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { ActionSheetIOS, ActivityIndicator, Alert, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { Badge, ErrorText, Field, Row, SectionTitle, Sheet } from '../../components/controls';
+import { EditEntrySheet } from '../../components/EditEntrySheet';
+import { ReportSheet, type ReportTarget } from '../../components/ReportSheet';
 import { ScorePanel } from '../../components/ScorePanel';
 import { Body, Button, Card, Centered, ProgressBar, Screen, Title } from '../../components/ui';
 import { colors, radius, space } from '../../components/theme';
@@ -10,9 +12,8 @@ import { api, errorMessage } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { gameStatusLine, GAME_TYPE_LABEL, timeAgo } from '../../lib/format';
 import { useFeed, useFlags, useFriendships, useGame, useMembers, useProfiles } from '../../lib/hooks';
-import { isLive, type Entry, type Game, type Member } from '../../lib/types';
+import { canEditEntry, isLive, type Entry, type Game, type Member } from '../../lib/types';
 
-const UNDO_MS = 5 * 60 * 1000;
 const FLAG_AFTER_END_MS = 24 * 60 * 60 * 1000;
 
 function canFlag(game: Game, now = Date.now()) {
@@ -30,6 +31,8 @@ export default function GameScreen() {
   const { data: flags } = useFlags(game?.createdBy === uid ? id : undefined);
   const [flagging, setFlagging] = useState<Entry | null>(null);
   const [inviting, setInviting] = useState(false);
+  const [editing, setEditing] = useState<Entry | null>(null);
+  const [reporting, setReporting] = useState<ReportTarget | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const live = game ? isLive(game) : false;
@@ -72,6 +75,26 @@ export default function GameScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: label, style: 'destructive', onPress: () => run(action) },
     ]);
+  }
+
+  function playerOptions(m: Member) {
+    const report = () => setReporting({ type: 'user', id: m.id, label: `@${m.username}` });
+    const remove = () =>
+      confirm('Remove player', `Remove @${m.username} from this game?`, 'Remove', () => api.removeMember({ gameId: game!.id, userId: m.id }));
+    const canRemove = isCreator && game!.status === 'active';
+    const options = canRemove ? ['Remove from game', 'Report', 'Cancel'] : ['Report', 'Cancel'];
+    const handlers = canRemove ? [remove, report] : [report];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { title: `@${m.username}`, options, cancelButtonIndex: options.length - 1, destructiveButtonIndex: canRemove ? 0 : undefined },
+        (i) => handlers[i]?.(),
+      );
+    } else {
+      Alert.alert(`@${m.username}`, undefined, [
+        ...handlers.map((h, i) => ({ text: options[i], onPress: h })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ]);
+    }
   }
 
   async function shareCode() {
@@ -120,14 +143,11 @@ export default function GameScreen() {
             rank={i + 1}
             game={game}
             isMe={m.id === uid}
-            onLongPress={
-              isCreator && m.id !== uid && game.status === 'active'
-                ? () => confirm('Remove player', `Remove @${m.username} from this game?`, 'Remove', () => api.removeMember({ gameId: game.id, userId: m.id }))
-                : undefined
-            }
+            onLongPress={m.id !== uid ? () => playerOptions(m) : undefined}
           />
         ))}
       </Card>
+      {members.length > 1 && <Body muted style={{ fontSize: 13, marginTop: -space.sm }}>Hold a player for more options.</Body>}
 
       {game.status === 'active' && (
         <View style={{ flexDirection: 'row', gap: space.sm }}>
@@ -177,8 +197,9 @@ export default function GameScreen() {
             key={e.id}
             entry={e}
             isMine={e.userId === uid}
-            canFlag={!isCreatorOwn(e, uid) && canFlag(game)}
-            onUndo={() => run(() => api.removePoints({ entryId: e.id }))}
+            canFlag={canFlag(game)}
+            canEdit={e.userId === uid && canEditEntry(e, game)}
+            onEdit={() => setEditing(e)}
             onFlag={() => setFlagging(e)}
           />
         ))}
@@ -206,14 +227,14 @@ export default function GameScreen() {
           />
         ))}
 
+      {!isCreator && <Button label="Report this game" variant="ghost" onPress={() => setReporting({ type: 'game', id: game.id, label: 'this game' })} />}
+
       <FlagSheet entry={flagging} onClose={() => setFlagging(null)} />
+      <EditEntrySheet entry={editing} gameName={game.name} onClose={() => setEditing(null)} />
+      <ReportSheet target={reporting} onClose={() => setReporting(null)} />
       <InviteSheet visible={inviting} onClose={() => setInviting(false)} game={game} />
     </Screen>
   );
-}
-
-function isCreatorOwn(e: Entry, uid: string) {
-  return e.userId === uid;
 }
 
 function LeaderRow({ member, rank, game, isMe, onLongPress }: { member: Member; rank: number; game: Game; isMe: boolean; onLongPress?: () => void }) {
@@ -241,17 +262,18 @@ function FeedRow({
   entry,
   isMine,
   canFlag,
-  onUndo,
+  canEdit,
+  onEdit,
   onFlag,
 }: {
   entry: Entry;
   isMine: boolean;
   canFlag: boolean;
-  onUndo: () => void;
+  canEdit: boolean;
+  onEdit: () => void;
   onFlag: () => void;
 }) {
   const removed = entry.deletedAt !== null;
-  const recent = entry.createdAt && Date.now() - entry.createdAt.toMillis() < UNDO_MS;
   return (
     <Row>
       <View style={{ flex: 1 }}>
@@ -261,15 +283,16 @@ function FeedRow({
         <Text style={styles.feedMeta}>
           {timeAgo(entry.createdAt)}
           {entry.source === 'widget' ? ' · widget' : ''}
+          {entry.editedAt && entry.originalAmount !== undefined ? ` · edited from ${entry.originalAmount}` : ''}
         </Text>
       </View>
       {entry.flagStatus === 'pending' && <Badge label="Flagged" tone="accent" />}
       {entry.removedByFlag && <Badge label="Removed" tone="danger" />}
-      {removed && !entry.removedByFlag && <Badge label="Undone" />}
+      {removed && !entry.removedByFlag && <Badge label="Deleted" />}
       {entry.flagStatus === 'dismissed' && <Badge label="Stands" />}
-      {!removed && !entry.flagStatus && isMine && recent && (
-        <Pressable onPress={onUndo} accessibilityRole="button" hitSlop={8}>
-          <Text style={styles.action}>Undo</Text>
+      {canEdit && (
+        <Pressable onPress={onEdit} accessibilityRole="button" accessibilityLabel={`Edit your ${entry.amount} points`} hitSlop={8}>
+          <Text style={styles.action}>Edit</Text>
         </Pressable>
       )}
       {!removed && !entry.flagStatus && !isMine && canFlag && (

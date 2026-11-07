@@ -1,81 +1,93 @@
 import { Platform } from 'react-native';
+import type { PendingWidgetEntry, WidgetState } from '../widget/core';
+
+export type { WidgetState } from '../widget/core';
 
 /** App Group shared with the iOS widget. Must match app.json and targets/widget. */
 export const APP_GROUP = 'group.com.jpquestions.contact10';
 
-type Storage = {
-  set(key: string, value?: string | number): void;
-  get(key: string): string | null;
-  remove(key: string): void;
-};
-type StorageClass = { new (group: string): Storage; reloadWidget(name?: string): void };
+type IosStorage = { set(key: string, value?: string | number): void; get(key: string): string | null; remove(key: string): void };
+type IosStorageClass = { new (group: string): IosStorage; reloadWidget(name?: string): void };
 
-let cls: StorageClass | null | undefined;
-let storage: Storage | null = null;
+let iosClass: IosStorageClass | null | undefined;
+let iosStorage: IosStorage | null = null;
 
-// The native module only exists in development and store builds, not Expo Go.
-function shared(): { storage: Storage; cls: StorageClass } | null {
+// The native modules only exist in development and store builds, not Expo Go.
+function ios(): { storage: IosStorage; cls: IosStorageClass } | null {
   if (Platform.OS !== 'ios') return null;
-  if (cls === undefined) {
+  if (iosClass === undefined) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      cls = require('@bacons/apple-targets').ExtensionStorage as StorageClass;
+      iosClass = require('@bacons/apple-targets').ExtensionStorage as IosStorageClass;
     } catch {
-      cls = null;
+      iosClass = null;
     }
   }
-  if (!cls) return null;
+  if (!iosClass) return null;
   try {
-    storage ??= new cls(APP_GROUP);
-    return { storage, cls };
+    iosStorage ??= new iosClass(APP_GROUP);
+    return { storage: iosStorage, cls: iosClass };
   } catch {
     return null;
   }
 }
 
-/** What the widget needs to show totals and log points on its own. */
-export type WidgetState = {
-  refreshToken: string;
-  apiKey: string;
-  functionsBase: string;
-  username: string;
-  lifetimePoints: number;
-  activeGameId: string | null;
-  activeGameName: string | null;
-  gamePoints: number | null;
-  leaders: { username: string; points: number }[];
-};
+function android() {
+  if (Platform.OS !== 'android') return null;
+  try {
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    const { androidWidgetStore } = require('../widget/android/storage') as typeof import('../widget/android/storage');
+    const { refreshAndroidWidgets } = require('../widget/android/task-handler') as typeof import('../widget/android/task-handler');
+    /* eslint-enable @typescript-eslint/no-require-imports */
+    return { store: androidWidgetStore, refresh: refreshAndroidWidgets };
+  } catch {
+    return null;
+  }
+}
 
 let lastWritten = '';
 
+/** Shares the signed in user's totals and live games with the home screen widgets. */
 export function syncWidget(state: WidgetState | null) {
-  const s = shared();
-  if (!s) return;
   const json = state ? JSON.stringify(state) : '';
   if (json === lastWritten) return;
   lastWritten = json;
-  if (state) s.storage.set('state', json);
-  else {
-    s.storage.remove('state');
-    s.storage.remove('pending');
+
+  const i = ios();
+  if (i) {
+    if (state) i.storage.set('state', json);
+    else ['state', 'pending', 'target', 'idToken', 'idTokenExpiry', 'lastError'].forEach((k) => i.storage.remove(k));
+    i.cls.reloadWidget();
   }
-  s.cls.reloadWidget();
-}
 
-export type PendingWidgetEntry = { entryId: string; gameId: string | null; amount: number };
-
-/** Entries the widget logged while offline, for the app to deliver. */
-export function takePendingWidgetEntries(): PendingWidgetEntry[] {
-  const s = shared();
-  if (!s) return [];
-  const raw = s.storage.get('pending');
-  if (!raw) return [];
-  s.storage.remove('pending');
-  try {
-    return JSON.parse(raw) as PendingWidgetEntry[];
-  } catch {
-    return [];
+  const a = android();
+  if (a) {
+    (async () => {
+      if (state) await a.store.setState(state);
+      else await a.store.clear();
+      await a.refresh().catch(() => undefined);
+    })();
   }
 }
 
-export const widgetSupported = () => shared() !== null;
+/** Entries a widget logged while offline, for the app to deliver. */
+export async function takePendingWidgetEntries(): Promise<PendingWidgetEntry[]> {
+  const i = ios();
+  if (i) {
+    const raw = i.storage.get('pending');
+    if (!raw) return [];
+    i.storage.remove('pending');
+    try {
+      return JSON.parse(raw) as PendingWidgetEntry[];
+    } catch {
+      return [];
+    }
+  }
+  const a = android();
+  if (a) {
+    const pending = await a.store.pending();
+    await a.store.setPending([]);
+    return pending;
+  }
+  return [];
+}

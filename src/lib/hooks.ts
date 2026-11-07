@@ -61,6 +61,24 @@ export function useMyGames() {
 
 export const useGame = (id: string | undefined) => useDocument<Game>(id ? `games/${id}` : null);
 
+/** Leaderboards for several games at once (the widget's live games). */
+export function useMembersOf(gameIds: string[]) {
+  const key = gameIds.join(',');
+  const [byGame, setByGame] = useState<Record<string, Member[]>>({});
+  useEffect(() => {
+    const unsubs = gameIds.map((id) =>
+      onSnapshot(
+        query(collection(db, `games/${id}/members`), orderBy('points', 'desc')),
+        (snap) => setByGame((m) => ({ ...m, [id]: snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Member) })),
+        () => undefined,
+      ),
+    );
+    return () => unsubs.forEach((u) => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return byGame;
+}
+
 export function useMembers(gameId: string | undefined) {
   return useQuery<Member>(() => (gameId ? query(collection(db, `games/${gameId}/members`), orderBy('points', 'desc')) : null), [gameId]);
 }

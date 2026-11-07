@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
+import { DateField } from '../../components/DateField';
 import { Chip, ErrorText, Field, Segmented } from '../../components/controls';
 import { Body, Button } from '../../components/ui';
 import { colors, space } from '../../components/theme';
 import { api, errorMessage, type GameType, type RewardMode } from '../../lib/api';
-import { defaultNightEnd, weekendWindow } from '../../lib/format';
+import { customWindow, defaultNightEnd, weekendWindow } from '../../lib/format';
 
 const TARGETS = [10, 25, 50, 100];
 
@@ -20,6 +21,8 @@ export default function NewGame() {
   const [reward, setReward] = useState('');
   const [mode, setMode] = useState<RewardMode>('first');
   const [houseRules, setHouseRules] = useState('');
+  const [firstDay, setFirstDay] = useState(() => new Date());
+  const [lastDay, setLastDay] = useState(() => new Date(Date.now() + 6 * 24 * 60 * 60 * 1000));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,14 +30,16 @@ export default function NewGame() {
     const now = new Date();
     if (type === 'night') return { start: now, end: defaultNightEnd(now) };
     if (type === 'weekend') return weekendWindow(now);
+    if (type === 'custom') return customWindow(firstDay, lastDay, now);
     return { start: now, end: null };
-  }, [type]);
+  }, [type, firstDay, lastDay]);
 
   async function create() {
     const targetPoints = Number(target);
     if (!name.trim()) return setError('Give the game a name.');
     if (!Number.isInteger(targetPoints) || targetPoints < 1 || targetPoints > 100000) return setError('Target must be a whole number of points.');
     if (!reward.trim()) return setError('Set a reward for hitting the target.');
+    if (window.end && window.end.getTime() <= window.start.getTime()) return setError('The last day must be on or after the first day.');
     setBusy(true);
     setError(null);
     try {
@@ -67,8 +72,30 @@ export default function NewGame() {
             { value: 'night', label: 'Night' },
             { value: 'weekend', label: 'Weekend' },
             { value: 'ongoing', label: 'Ongoing' },
+            { value: 'custom', label: 'Dates' },
           ]}
         />
+        {type === 'custom' && (
+          <View style={{ gap: space.sm }}>
+            <DateField
+              label="First day"
+              value={firstDay}
+              minimumDate={new Date()}
+              maximumDate={new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)}
+              onChange={(d) => {
+                setFirstDay(d);
+                if (lastDay < d) setLastDay(d);
+              }}
+            />
+            <DateField
+              label="Last day"
+              value={lastDay}
+              minimumDate={firstDay}
+              maximumDate={new Date(firstDay.getTime() + 365 * 24 * 60 * 60 * 1000)}
+              onChange={setLastDay}
+            />
+          </View>
+        )}
         <Body muted>
           {window.end
             ? `${window.start.getTime() > Date.now() + 60000 ? `Starts ${when(window.start)}. ` : 'Starts now. '}Ends ${when(window.end)}.`

@@ -23,7 +23,7 @@ export default function Rewards() {
   return (
     <Screen>
       <Title>Rewards</Title>
-      <Body muted>Set a reward for each milestone on your lifetime points. Tap a milestone to edit its reward.</Body>
+      <Body muted>Pick a reward for yourself at each milestone on your lifetime points: new shoes at 500, a trip at 5,000. Tap Set on any milestone.</Body>
       {progress.next !== null && (
         <Card>
           <Body>
@@ -47,7 +47,12 @@ export default function Rewards() {
                   {reward ?? 'Add a reward'}
                 </Text>
               </View>
-              <Text style={styles.state}>{reached ? (date ? date.toLocaleDateString() : 'Reached') : 'Locked'}</Text>
+              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                <View style={styles.pill}>
+                  <Text style={styles.pillText}>{reward ? 'Edit' : 'Set'}</Text>
+                </View>
+                <Text style={styles.state}>{reached ? (date ? date.toLocaleDateString() : 'Reached') : 'Locked'}</Text>
+              </View>
             </Row>
           );
         })}
@@ -99,6 +104,8 @@ const styles = StyleSheet.create({
   dotReached: { backgroundColor: colors.success, borderColor: colors.success },
   value: { color: colors.text, fontSize: 18, fontWeight: '800' },
   reward: { color: colors.textMuted, fontSize: 14 },
-  state: { color: colors.textMuted, fontSize: 13 },
+  state: { color: colors.textMuted, fontSize: 12 },
+  pill: { backgroundColor: colors.surfaceRaised, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 4 },
+  pillText: { color: colors.accent, fontSize: 13, fontWeight: '800' },
   sheetTitle: { color: colors.text, fontSize: 22, fontWeight: '900' },
 });

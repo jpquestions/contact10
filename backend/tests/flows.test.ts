@@ -162,8 +162,38 @@ describe('game flow', () => {
     const mine = await carol.call<{ entryId: string }>('addPoints', { gameId, amount: 2 });
     await carol.call('removePoints', { entryId: mine.entryId });
     assert.equal((await member(carol, gameId)).points, 6);
+    assert.equal(await code(carol.call('removePoints', { entryId: mine.entryId })), 'functions/failed-precondition');
     assert.equal((await profile(carol)).lifetimePoints, 6);
     assert.equal(await code(carol.call('removePoints', { entryId: bobEntry })), 'functions/not-found');
+  });
+
+  test('editing fixes points added by accident, milestones and targets included', async () => {
+    const oops = await carol.call<{ entryId: string; unlocked: number[]; lifetimePoints: number }>('addPoints', { gameId, amount: 100 });
+    assert.deepEqual(oops.unlocked, [10, 50, 100]);
+    assert.notEqual((await member(carol, gameId)).reachedTargetAt, null);
+
+    const fixed = await carol.call<{ lifetimePoints: number; gamePoints: number }>('editPoints', { entryId: oops.entryId, amount: 1 });
+    assert.deepEqual([fixed.lifetimePoints, fixed.gamePoints], [7, 7]);
+    assert.equal((await getDoc(doc(carol.db, `users/${carol.uid}/unlocks/10`))).exists(), false, 'accidental milestones are revoked');
+    assert.equal((await member(carol, gameId)).reachedTargetAt, null, 'accidental target is revoked');
+    const edited = (await getDoc(doc(alice.db, `entries/${oops.entryId}`))).data()!;
+    assert.deepEqual([edited.amount, edited.originalAmount], [1, 100], 'game mates can see it was edited');
+
+    assert.equal(await code(carol.call('editPoints', { entryId: oops.entryId, amount: 0 })), 'functions/invalid-argument');
+    assert.equal(await code(alice.call('editPoints', { entryId: oops.entryId, amount: 5 })), 'functions/not-found');
+  });
+
+  test('custom date range games', async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const base = { name: 'Summer', type: 'custom', targetPoints: 500, rewardText: 'Trip', rewardMode: 'everyone' };
+    const later = await alice.call<{ gameId: string }>('createGame', { ...base, startsAt: Date.now() + day, endsAt: Date.now() + 30 * day });
+    assert.equal(await code(alice.call('addPoints', { gameId: later.gameId, amount: 1 })), 'functions/failed-precondition', 'not started yet');
+    assert.equal(
+      await code(alice.call('createGame', { ...base, startsAt: Date.now(), endsAt: Date.now() + 400 * day })),
+      'functions/invalid-argument',
+    );
+    assert.equal(await code(alice.call('createGame', { ...base, startsAt: Date.now(), endsAt: null })), 'functions/invalid-argument');
+    await alice.call('endGame', { gameId: later.gameId });
   });
 
   test('flags go to the creator, and upheld flags take the points back', async () => {
