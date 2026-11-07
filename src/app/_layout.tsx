@@ -48,6 +48,8 @@ function RootNavigator() {
         <Stack.Screen name="game/[id]" options={pushed} />
         <Stack.Screen name="game/new" options={{ ...modal, title: 'New game' }} />
         <Stack.Screen name="join/[code]" options={{ ...modal, title: 'Join game' }} />
+        <Stack.Screen name="reward/[threshold]" options={{ ...modal, title: 'Reward' }} />
+        <Stack.Screen name="entry/[id]" options={{ ...modal, title: 'Edit points' }} />
         <Stack.Screen name="notifications" options={{ ...pushed, title: 'Notifications' }} />
         <Stack.Screen name="settings" options={{ ...pushed, title: 'Settings' }} />
       </Stack.Protected>

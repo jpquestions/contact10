@@ -60,6 +60,7 @@ export function useMyGames() {
 }
 
 export const useGame = (id: string | undefined) => useDocument<Game>(id ? `games/${id}` : null);
+export const useEntry = (id: string | undefined) => useDocument<Entry>(id ? `entries/${id}` : null);
 
 /** Leaderboards for several games at once (the widget's live games). */
 export function useMembersOf(gameIds: string[]) {

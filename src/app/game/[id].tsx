@@ -3,7 +3,6 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActionSheetIOS, ActivityIndicator, Alert, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { Badge, ErrorText, Field, Row, SectionTitle, Sheet } from '../../components/controls';
-import { EditEntrySheet } from '../../components/EditEntrySheet';
 import { ReportSheet, type ReportTarget } from '../../components/ReportSheet';
 import { ScorePanel } from '../../components/ScorePanel';
 import { Body, Button, Card, Centered, ProgressBar, Screen, Title } from '../../components/ui';
@@ -31,7 +30,6 @@ export default function GameScreen() {
   const { data: flags } = useFlags(game?.createdBy === uid ? id : undefined);
   const [flagging, setFlagging] = useState<Entry | null>(null);
   const [inviting, setInviting] = useState(false);
-  const [editing, setEditing] = useState<Entry | null>(null);
   const [reporting, setReporting] = useState<ReportTarget | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -199,7 +197,7 @@ export default function GameScreen() {
             isMine={e.userId === uid}
             canFlag={canFlag(game)}
             canEdit={e.userId === uid && canEditEntry(e, game)}
-            onEdit={() => setEditing(e)}
+            onEdit={() => router.push(`/entry/${e.id}`)}
             onFlag={() => setFlagging(e)}
           />
         ))}
@@ -230,7 +228,6 @@ export default function GameScreen() {
       {!isCreator && <Button label="Report this game" variant="ghost" onPress={() => setReporting({ type: 'game', id: game.id, label: 'this game' })} />}
 
       <FlagSheet entry={flagging} onClose={() => setFlagging(null)} />
-      <EditEntrySheet entry={editing} gameName={game.name} onClose={() => setEditing(null)} />
       <ReportSheet target={reporting} onClose={() => setReporting(null)} />
       <InviteSheet visible={inviting} onClose={() => setInviting(false)} game={game} />
     </Screen>

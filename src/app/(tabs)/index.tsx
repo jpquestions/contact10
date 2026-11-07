@@ -1,9 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Row, SectionTitle } from '../../components/controls';
-import { EditEntrySheet } from '../../components/EditEntrySheet';
 import { GameCard } from '../../components/GameCard';
 import { InviteList } from '../../components/InviteList';
 import { ScorePanel } from '../../components/ScorePanel';
@@ -13,7 +11,7 @@ import { useAuth } from '../../lib/auth';
 import { timeAgo } from '../../lib/format';
 import { useMyEntries, useMyGames, useNotifications, useRewards } from '../../lib/hooks';
 import { milestoneProgress } from '../../lib/milestones';
-import { canEditEntry, isLive, type Entry } from '../../lib/types';
+import { canEditEntry, isLive } from '../../lib/types';
 
 export default function Home() {
   const { user, profile, updateProfile } = useAuth();
@@ -21,7 +19,6 @@ export default function Home() {
   const { data: notes } = useNotifications();
   const { data: mine } = useMyEntries();
   const { data: rewards } = useRewards();
-  const [editing, setEditing] = useState<Entry | null>(null);
   const gameName = (id: string | null) => (id ? (games.find((g) => g.id === id)?.name ?? 'Game') : 'Solo');
   const recent = mine.filter((e) => !e.deletedAt).slice(0, 5);
   const unread = notes.filter((n) => !n.readAt).length;
@@ -71,6 +68,7 @@ export default function Home() {
       {recent.length > 0 && (
         <>
           <SectionTitle>Your recent points</SectionTitle>
+          <Body muted style={{ fontSize: 13, marginTop: -space.sm }}>Your lifetime total is the sum of these. Added too many by accident? Tap Edit to fix or delete them.</Body>
           <Card style={{ gap: 0 }}>
             {recent.map((e) => {
               const game = e.gameId ? (games.find((g) => g.id === e.gameId) ?? null) : null;
@@ -85,7 +83,7 @@ export default function Home() {
                     </Text>
                   </View>
                   {editable && (
-                    <Pressable onPress={() => setEditing(e)} accessibilityRole="button" accessibilityLabel={`Edit your ${e.amount} points`} hitSlop={8}>
+                    <Pressable onPress={() => router.push(`/entry/${e.id}`)} accessibilityRole="button" accessibilityLabel={`Edit your ${e.amount} points`} hitSlop={8}>
                       <Text style={styles.link}>Edit</Text>
                     </Pressable>
                   )}
@@ -112,7 +110,6 @@ export default function Home() {
           <Button label="Join with code" variant="secondary" onPress={() => router.push('/join/enter')} />
         </View>
       </View>
-      <EditEntrySheet entry={editing} gameName={editing?.gameId ? gameName(editing.gameId) : null} onClose={() => setEditing(null)} />
     </Screen>
   );
 }
